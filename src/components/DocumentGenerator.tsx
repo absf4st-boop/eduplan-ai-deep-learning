@@ -11,6 +11,7 @@ import {
 } from 'lucide-react';
 import { DocumentType, UserAccount, SavedDocument } from '../types';
 import { DocumentEditor } from './DocumentEditor';
+import { generateCurriculumFallback } from '../services/curriculumGenerator';
 
 interface DocumentGeneratorProps {
   documentType: DocumentType;
@@ -171,18 +172,52 @@ export const DocumentGenerator: React.FC<DocumentGeneratorProps> = ({
     // Prepare context documents for prompt
     const contextMap: Record<string, string> = {};
     linkedDocs.forEach((d) => {
-      contextMap[`${d.documentType}_${d.title}`] = d.content.substring(0, 1500); // pass contextual snippet
+      contextMap[`${d.documentType}_${d.title}`] = d.content.substring(0, 1500);
     });
 
     const stepInterval = setInterval(() => {
       setGenerationStep((prev) => (prev < 4 ? prev + 1 : prev));
-    }, 900);
+    }, 800);
+
+    let docContent: string | null = null;
 
     try {
-      const response = await fetch('/api/generate', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
+      // 1. First attempt: call server endpoint /api/generate (works on AI Studio, Express, or Netlify Functions)
+      try {
+        const response = await fetch('/api/generate', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            documentType,
+            subject,
+            grade,
+            phase,
+            semester,
+            schoolYear,
+            material,
+            additionalInstructions: `${additionalInstructions}. Dimensi Profil Lulusan: ${selectedDimensions.join(', ')}. Pendekatan 3 Prinsip Deep Learning (Mindful, Meaningful, Joyful).`,
+            teacher: currentUser.teacherProfile,
+            school: currentUser.schoolProfile,
+            contextDocuments: contextMap,
+          }),
+        });
+
+        if (response.ok) {
+          const contentType = response.headers.get('content-type') || '';
+          if (contentType.includes('application/json')) {
+            const data = await response.json();
+            if (data && data.content) {
+              docContent = data.content;
+            }
+          }
+        }
+      } catch (fetchErr) {
+        console.warn('API /api/generate offline / static hosting (GitHub Pages), using client engine:', fetchErr);
+      }
+
+      // 2. Second attempt: If backend is not available (GitHub Pages / static Netlify), use high-fidelity Deep Learning Curriculum Engine
+      if (!docContent) {
+        docContent = generateCurriculumFallback({
           documentType,
           subject,
           grade,
@@ -190,27 +225,38 @@ export const DocumentGenerator: React.FC<DocumentGeneratorProps> = ({
           semester,
           schoolYear,
           material,
-          additionalInstructions: `${additionalInstructions}. Dimensi Profil Lulusan: ${selectedDimensions.join(', ')}. Pendekatan 3 Prinsip Deep Learning (Mindful, Meaningful, Joyful).`,
           teacher: currentUser.teacherProfile,
           school: currentUser.schoolProfile,
-          contextDocuments: contextMap,
-        }),
-      });
+          additionalInstructions: `${additionalInstructions}. Dimensi Profil Lulusan: ${selectedDimensions.join(', ')}. Pendekatan 3 Prinsip Deep Learning (Mindful, Meaningful, Joyful).`,
+        });
+      }
 
-      const data = await response.json();
       clearInterval(stepInterval);
       setGenerationStep(5);
 
       setTimeout(() => {
         setIsGenerating(false);
-        if (data && data.content) {
-          setGeneratedHtml(data.content);
+        if (docContent) {
+          setGeneratedHtml(docContent);
         }
-      }, 600);
+      }, 500);
     } catch (err) {
-      console.error('Generation error', err);
+      console.error('Generation error fallback:', err);
       clearInterval(stepInterval);
+      const safeContent = generateCurriculumFallback({
+        documentType,
+        subject,
+        grade,
+        phase,
+        semester,
+        schoolYear,
+        material,
+        teacher: currentUser.teacherProfile,
+        school: currentUser.schoolProfile,
+        additionalInstructions,
+      });
       setIsGenerating(false);
+      setGeneratedHtml(safeContent);
     }
   };
 

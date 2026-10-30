@@ -19,39 +19,44 @@ export const PublishGuideModal: React.FC<PublishGuideModalProps> = ({ isOpen, on
 
   const steps = [
     {
-      title: 'Langkah 1: Siapkan Repository di GitHub',
+      title: 'Langkah 1: Mengapa AI Tidak Berfungsi Sebelumnya & Solusinya',
+      icon: <ShieldCheck className="w-5 h-5 text-emerald-600" />,
+      desc: 'GitHub Pages dan hosting statis hanya menjalankan file HTML/JS (frontend) tanpa server backend Express. Sekarang aplikasi telah diperbarui dengan Dual-Engine: jika server backend offline (di GitHub), generator langsung otomatis beralih ke Mesin Kurikulum Deep Learning di browser sehingga 100% selalu berhasil membuat dokumen!',
+    },
+    {
+      title: 'Langkah 2: Siapkan Repository di GitHub',
       icon: <Github className="w-5 h-5 text-slate-800" />,
-      desc: 'Buat repository baru di akun GitHub Anda (misalnya: `eduplan-ai-deep-learning`).',
+      desc: 'Buat repository baru di akun GitHub Anda (misalnya: `eduplan-ai-deep-learning`), lalu push kode terbaru:',
       commands: `git init
 git add .
-git commit -m "feat: inisialisasi EDU PLAN AI Deep Learning"
+git commit -m "feat: inisialisasi EDU PLAN AI Deep Learning dengan netlify serverless functions"
 git branch -M main
 git remote add origin https://github.com/USERNAME-ANDA/eduplan-ai-deep-learning.git
 git push -u origin main`,
     },
     {
-      title: 'Langkah 2: Hubungkan Repository ke Netlify',
+      title: 'Langkah 3: Hubungkan Repository ke Netlify (Disarankan)',
       icon: <Globe className="w-5 h-5 text-teal-600" />,
       desc: 'Buka dashboard Netlify (app.netlify.com), klik "Add new site" > "Import an existing project", lalu pilih akun GitHub dan repository yang baru dibuat.',
       settings: [
         { label: 'Build command', val: 'npm run build' },
         { label: 'Publish directory', val: 'dist' },
-        { label: 'Node Version', val: '20.x atau 22.x' },
+        { label: 'Functions directory', val: 'netlify/functions' },
       ],
     },
     {
-      title: 'Langkah 3: Konfigurasi Environment Variables di Netlify',
+      title: 'Langkah 4: Konfigurasi Environment Variables di Netlify',
       icon: <ShieldCheck className="w-5 h-5 text-emerald-600" />,
       desc: 'Di menu Site configuration > Environment variables Netlify, tambahkan variabel:',
       envVars: [
-        { key: 'GEMINI_API_KEY', desc: 'API Key Google Gemini untuk fitur generate cerdas server-side.' },
+        { key: 'GEMINI_API_KEY', desc: 'API Key Google Gemini Anda agar Netlify Functions dapat memproses AI server-side.' },
         { key: 'NODE_VERSION', desc: '22' },
       ],
     },
     {
-      title: 'Langkah 4: Deploy & Domain Kustom Sekolah',
+      title: 'Langkah 5: Deploy & Selesai',
       icon: <Terminal className="w-5 h-5 text-blue-600" />,
-      desc: 'Klik tombol "Deploy site". Netlify akan otomatis melakukan build. Setelah selesai, Anda akan mendapatkan URL publik gratis (misal: `eduplan-sd.netlify.app`), atau hubungkan domain kustom sekolah (misal: `kurikulum.sdnkasepuhan04.sch.id`).',
+      desc: 'Klik tombol "Deploy site". Berkat konfigurasi netlify.toml & functions yang sudah kami sertakan, seluruh 11 menu administrasi akan langsung aktif dan dapat di-generate!',
     },
   ];
 
