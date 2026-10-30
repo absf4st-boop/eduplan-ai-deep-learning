@@ -1,11 +1,29 @@
 import React, { useState, useEffect } from 'react';
-import { X, Mail, Lock, User, ArrowRight, ShieldCheck, RefreshCw, KeyRound, AlertCircle, CheckCircle2 } from 'lucide-react';
+import {
+  X,
+  Mail,
+  Lock,
+  User,
+  ArrowRight,
+  ShieldCheck,
+  RefreshCw,
+  KeyRound,
+  AlertCircle,
+  CheckCircle2,
+  UserCheck,
+  Sparkles,
+} from 'lucide-react';
 import { UserAccount } from '../types';
-import { getAllUsers, setCurrentUser } from '../services/storage';
+import {
+  getAllUsers,
+  getRegisteredUsers,
+  findUserByEmail,
+  setCurrentUser,
+} from '../services/storage';
 
 interface AuthModalProps {
   isOpen: boolean;
-  initialMode?: 'login' | 'register' | 'forgot';
+  initialMode?: 'login' | 'register' | 'forgot' | 'quick_otp';
   onClose: () => void;
   onSuccess: (user: UserAccount, isNewRegistration: boolean) => void;
 }
@@ -16,14 +34,16 @@ export const AuthModal: React.FC<AuthModalProps> = ({
   onClose,
   onSuccess,
 }) => {
-  const [mode, setMode] = useState<'login' | 'register' | 'otp' | 'forgot' | 'reset'>(initialMode);
-  
+  const [mode, setMode] = useState<'login' | 'register' | 'otp' | 'forgot' | 'reset' | 'quick_otp'>(
+    initialMode
+  );
+
   // Registration & Login fields
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
-  
+
   // OTP state
   const [otpInput, setOtpInput] = useState('');
   const [generatedOtp, setGeneratedOtp] = useState('');
@@ -35,6 +55,8 @@ export const AuthModal: React.FC<AuthModalProps> = ({
   // Status message
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
+
+  const registeredUsers = getRegisteredUsers();
 
   useEffect(() => {
     setMode(initialMode);
@@ -69,12 +91,15 @@ export const AuthModal: React.FC<AuthModalProps> = ({
   const handleRegisterSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMsg(null);
+    setSuccessMsg(null);
+
+    const cleanEmail = email.trim().toLowerCase();
 
     if (!name.trim()) {
       setErrorMsg('Nama lengkap wajib diisi');
       return;
     }
-    if (!email.includes('@') || !email.includes('.')) {
+    if (!cleanEmail.includes('@') || !cleanEmail.includes('.')) {
       setErrorMsg('Format email tidak valid');
       return;
     }
@@ -87,8 +112,26 @@ export const AuthModal: React.FC<AuthModalProps> = ({
       return;
     }
 
-    // Trigger OTP Flow
-    triggerOtpSend(email);
+    // CHECK IF EMAIL IS ALREADY REGISTERED
+    const existing = findUserByEmail(cleanEmail);
+    if (existing && !existing.isDemo) {
+      // If the password matches existing password, immediately log them in!
+      if (existing.passwordHash === btoa(password)) {
+        setCurrentUser(existing);
+        onSuccess(existing, false);
+        return;
+      }
+      // If already registered, switch to login mode automatically with friendly guidance
+      setMode('login');
+      setEmail(cleanEmail);
+      setSuccessMsg(
+        `Email "${cleanEmail}" sudah terdaftar sebelumnya! Anda dapat langsung login dengan password Anda.`
+      );
+      return;
+    }
+
+    // New user: trigger OTP Flow
+    triggerOtpSend(cleanEmail);
     setMode('otp');
     setSuccessMsg('Kode verifikasi 6 digit telah dikirimkan ke email Anda.');
   };
@@ -113,56 +156,71 @@ export const AuthModal: React.FC<AuthModalProps> = ({
       return;
     }
 
-    // OTP Verified! Create user
-    const newUserId = 'user_' + Date.now();
-    const newUser: UserAccount = {
-      id: newUserId,
-      name,
-      email,
-      passwordHash: btoa(password), // simple base64 hash simulation
-      isDemo: false,
-      createdAt: new Date().toISOString(),
-      teacherProfile: {
-        name,
-        nip: '19850101 201501 1 001',
-        email,
-        position: 'Guru Kelas / Mata Pelajaran SD',
-        rank: 'Penata Muda / III-a',
-      },
-      schoolProfile: {
-        name: 'SD Negeri Unggulan 01',
-        npsn: '20309999',
-        educationLevel: 'Sekolah Dasar (SD)',
-        address: 'Jl. Pendidikan Nasional No. 10',
-        village: 'Sukamaju',
-        district: 'Kecamatan Cerdas',
-        regency: 'Kabupaten Prestasi',
-        province: 'Jawa Barat',
-        schoolYear: '2026/2027',
-        principalName: 'H. Bambang Irawan, M.Pd.',
-        principalNip: '19700101 199503 1 001',
-        logoUrl: '',
-      },
-    };
+    const cleanEmail = email.trim().toLowerCase();
+    const existing = findUserByEmail(cleanEmail);
 
-    setCurrentUser(newUser);
-    onSuccess(newUser, true);
+    let targetUser: UserAccount;
+    const isNew: boolean = !existing || Boolean(existing.isDemo);
+
+    if (existing && !existing.isDemo) {
+      // PRESERVE the existing account and ID so all saved documents remain intact!
+      targetUser = {
+        ...existing,
+        name: name.trim() || existing.name,
+        passwordHash: password ? btoa(password) : existing.passwordHash,
+      };
+    } else {
+      const newUserId = 'user_' + Date.now();
+      targetUser = {
+        id: newUserId,
+        name: name.trim() || 'Guru SD',
+        email: cleanEmail,
+        passwordHash: btoa(password || '123456'),
+        isDemo: false,
+        createdAt: new Date().toISOString(),
+        teacherProfile: {
+          name: name.trim() || 'Guru SD',
+          nip: '19850101 201501 1 001',
+          email: cleanEmail,
+          position: 'Guru Kelas / Mata Pelajaran SD',
+          rank: 'Penata Muda / III-a',
+        },
+        schoolProfile: {
+          name: 'SD Negeri Unggulan 01',
+          npsn: '20309999',
+          educationLevel: 'Sekolah Dasar (SD)',
+          address: 'Jl. Pendidikan Nasional No. 10',
+          village: 'Sukamaju',
+          district: 'Kecamatan Cerdas',
+          regency: 'Kabupaten Prestasi',
+          province: 'Jawa Barat',
+          schoolYear: '2026/2027',
+          principalName: 'H. Bambang Irawan, M.Pd.',
+          principalNip: '19700101 199503 1 001',
+          logoUrl: '',
+        },
+      };
+    }
+
+    setCurrentUser(targetUser);
+    onSuccess(targetUser, isNew);
   };
 
   const handleLoginSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMsg(null);
+    setSuccessMsg(null);
 
-    const users = getAllUsers();
-    const user = users.find((u) => u.email.toLowerCase() === email.toLowerCase());
+    const cleanEmail = email.trim().toLowerCase();
+    const user = findUserByEmail(cleanEmail);
 
     if (!user) {
-      setErrorMsg('Email tidak terdaftar. Silakan lakukan registrasi terlebih dahulu.');
+      setErrorMsg('Email belum terdaftar. Silakan lakukan registrasi atau periksa penulisan email.');
       return;
     }
 
     if (user.passwordHash && user.passwordHash !== btoa(password)) {
-      setErrorMsg('Password yang Anda masukkan salah.');
+      setErrorMsg('Password salah. Silakan coba lagi atau gunakan opsi Masuk Cepat via OTP.');
       return;
     }
 
@@ -170,18 +228,35 @@ export const AuthModal: React.FC<AuthModalProps> = ({
     onSuccess(user, false);
   };
 
+  const handleQuickOtpLogin = () => {
+    setErrorMsg(null);
+    const cleanEmail = email.trim().toLowerCase();
+    if (!cleanEmail.includes('@')) {
+      setErrorMsg('Masukkan email Anda terlebih dahulu.');
+      return;
+    }
+    const user = findUserByEmail(cleanEmail);
+    if (!user) {
+      setErrorMsg('Email ini belum terdaftar. Silakan daftar akun baru terlebih dahulu.');
+      return;
+    }
+    triggerOtpSend(cleanEmail);
+    setMode('otp');
+    setSuccessMsg('Kode OTP login telah dikirimkan ke email Anda.');
+  };
+
   const handleForgotSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMsg(null);
 
-    const users = getAllUsers();
-    const user = users.find((u) => u.email.toLowerCase() === email.toLowerCase());
+    const cleanEmail = email.trim().toLowerCase();
+    const user = findUserByEmail(cleanEmail);
     if (!user) {
       setErrorMsg('Email tersebut tidak ditemukan dalam sistem kami.');
       return;
     }
 
-    triggerOtpSend(email);
+    triggerOtpSend(cleanEmail);
     setMode('reset');
     setSuccessMsg('Kode verifikasi reset password telah dikirim ke email Anda.');
   };
@@ -200,8 +275,8 @@ export const AuthModal: React.FC<AuthModalProps> = ({
       return;
     }
 
-    const users = getAllUsers();
-    const user = users.find((u) => u.email.toLowerCase() === email.toLowerCase());
+    const cleanEmail = email.trim().toLowerCase();
+    const user = findUserByEmail(cleanEmail);
     if (user) {
       user.passwordHash = btoa(password);
       setCurrentUser(user);
@@ -275,6 +350,41 @@ export const AuthModal: React.FC<AuthModalProps> = ({
             </div>
           )}
 
+          {/* Quick Select for Already Registered Accounts on this device */}
+          {mode === 'login' && registeredUsers.length > 0 && (
+            <div className="mb-4 bg-blue-50/80 border border-blue-200/80 rounded-xl p-3">
+              <div className="text-[11px] font-bold text-blue-900 mb-2 flex items-center gap-1.5">
+                <UserCheck className="w-4 h-4 text-emerald-600" />
+                <span>Akun Terdaftar di Perangkat Ini:</span>
+              </div>
+              <div className="space-y-1.5 max-h-36 overflow-y-auto">
+                {registeredUsers.map((u) => (
+                  <button
+                    key={u.id}
+                    type="button"
+                    onClick={() => {
+                      setCurrentUser(u);
+                      onSuccess(u, false);
+                    }}
+                    className="w-full flex items-center justify-between p-2 bg-white hover:bg-blue-50 rounded-lg border border-slate-200 hover:border-blue-400 text-left transition-all group"
+                  >
+                    <div className="overflow-hidden pr-2">
+                      <div className="font-bold text-xs text-slate-800 group-hover:text-blue-900 truncate">
+                        {u.name}
+                      </div>
+                      <div className="text-[10px] text-slate-500 truncate">
+                        {u.email} • {u.schoolProfile.name}
+                      </div>
+                    </div>
+                    <span className="text-[11px] font-bold text-blue-700 bg-blue-50 group-hover:bg-blue-100 px-2 py-1 rounded shrink-0">
+                      Masuk Otomatis →
+                    </span>
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
           {/* LOGIN MODE */}
           {mode === 'login' && (
             <form onSubmit={handleLoginSubmit} className="space-y-4">
@@ -297,9 +407,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
 
               <div>
                 <div className="flex items-center justify-between mb-1">
-                  <label className="text-xs font-semibold text-slate-700">
-                    Password
-                  </label>
+                  <label className="text-xs font-semibold text-slate-700">Password</label>
                   <button
                     type="button"
                     onClick={() => setMode('forgot')}
@@ -327,6 +435,16 @@ export const AuthModal: React.FC<AuthModalProps> = ({
               >
                 <span>Masuk ke Dashboard</span>
                 <ArrowRight className="w-4 h-4" />
+              </button>
+
+              {/* Passwordless OTP login button */}
+              <button
+                type="button"
+                onClick={handleQuickOtpLogin}
+                className="w-full py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold text-xs rounded-xl transition-all flex items-center justify-center gap-1.5"
+              >
+                <KeyRound className="w-3.5 h-3.5 text-blue-700" />
+                <span>Masuk Cepat via OTP (Tanpa Password)</span>
               </button>
 
               <div className="pt-2 text-center text-xs text-slate-500">
@@ -380,9 +498,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
               </div>
 
               <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1">
-                  Kata Sandi
-                </label>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">Kata Sandi</label>
                 <div className="relative">
                   <Lock className="absolute left-3 top-2.5 w-4 h-4 text-slate-400" />
                   <input

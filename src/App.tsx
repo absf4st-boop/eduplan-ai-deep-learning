@@ -98,6 +98,7 @@ export default function App() {
               setAuthModalOpen(true);
             }}
             onOpenPublishGuide={() => setPublishGuideOpen(true)}
+            onAutoLogin={(user) => handleAuthSuccess(user, false)}
           />
         ) : (
           <DashboardView

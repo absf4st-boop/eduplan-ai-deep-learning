@@ -55,7 +55,18 @@ export function getCurrentUser(): UserAccount {
   try {
     const raw = localStorage.getItem(CURRENT_USER_KEY);
     if (raw) {
-      return JSON.parse(raw);
+      const parsed = JSON.parse(raw);
+      if (parsed && parsed.id) {
+        return parsed;
+      }
+    }
+    // If current session is empty, check if there are any previously registered users
+    const registered = getRegisteredUsers();
+    if (registered.length > 0) {
+      // Automatically keep the user logged in!
+      const lastUser = registered[registered.length - 1];
+      localStorage.setItem(CURRENT_USER_KEY, JSON.stringify(lastUser));
+      return lastUser;
     }
   } catch (e) {
     console.error('Failed to load current user', e);
@@ -65,11 +76,15 @@ export function getCurrentUser(): UserAccount {
 
 export function setCurrentUser(user: UserAccount): void {
   localStorage.setItem(CURRENT_USER_KEY, JSON.stringify(user));
-  // Also sync to users list
+  // Sync to users list, avoiding duplicates by id or by email
   const users = getAllUsers();
-  const idx = users.findIndex((u) => u.id === user.id);
+  const idx = users.findIndex(
+    (u) =>
+      u.id === user.id ||
+      (!u.isDemo && !user.isDemo && u.email.trim().toLowerCase() === user.email.trim().toLowerCase())
+  );
   if (idx >= 0) {
-    users[idx] = user;
+    users[idx] = { ...users[idx], ...user };
   } else {
     users.push(user);
   }
@@ -80,13 +95,29 @@ export function getAllUsers(): UserAccount[] {
   try {
     const raw = localStorage.getItem(USERS_KEY);
     if (raw) {
-      return JSON.parse(raw);
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed) && parsed.length > 0) {
+        return parsed;
+      }
     }
   } catch (e) {
     console.error('Failed to load users', e);
   }
   return [DEMO_USER];
 }
+
+export function getRegisteredUsers(): UserAccount[] {
+  const users = getAllUsers();
+  return users.filter((u) => !u.isDemo);
+}
+
+export function findUserByEmail(email: string): UserAccount | undefined {
+  if (!email) return undefined;
+  const cleanEmail = email.trim().toLowerCase();
+  const users = getAllUsers();
+  return users.find((u) => u.email.trim().toLowerCase() === cleanEmail);
+}
+
 
 export function logoutUser(): void {
   localStorage.removeItem(CURRENT_USER_KEY);

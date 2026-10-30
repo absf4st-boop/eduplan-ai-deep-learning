@@ -12,20 +12,28 @@ import {
   MessageCircle,
   Users,
   Award,
+  UserCheck,
 } from 'lucide-react';
 import { Logo } from './Logo';
+import { getRegisteredUsers } from '../services/storage';
+import { UserAccount } from '../types';
 
 interface LandingPageProps {
   onOpenRegister: () => void;
   onOpenLogin: () => void;
   onOpenPublishGuide: () => void;
+  onAutoLogin?: (user: UserAccount) => void;
 }
 
 export const LandingPage: React.FC<LandingPageProps> = ({
   onOpenRegister,
   onOpenLogin,
   onOpenPublishGuide,
+  onAutoLogin,
 }) => {
+  const registeredUsers = getRegisteredUsers();
+  const lastUser = registeredUsers.length > 0 ? registeredUsers[registeredUsers.length - 1] : null;
+
   return (
     <div className="min-h-screen bg-slate-50 text-slate-800 flex flex-col font-sans">
       {/* Top Header Navbar */}
@@ -34,6 +42,17 @@ export const LandingPage: React.FC<LandingPageProps> = ({
           <Logo size="md" />
 
           <div className="flex items-center gap-3">
+            {lastUser && onAutoLogin ? (
+              <button
+                type="button"
+                onClick={() => onAutoLogin(lastUser)}
+                className="hidden sm:inline-flex items-center gap-2 px-4 py-2 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-300 rounded-xl text-xs font-bold transition-all shadow-xs"
+              >
+                <UserCheck className="w-4 h-4 text-emerald-600" />
+                <span>Masuk: {lastUser.name.split(' ')[0]}</span>
+              </button>
+            ) : null}
+
             <button
               type="button"
               onClick={onOpenLogin}
@@ -83,8 +102,37 @@ export const LandingPage: React.FC<LandingPageProps> = ({
               Platform kecerdasan buatan terdepan yang dirancang khusus untuk guru SD di seluruh Indonesia dalam menyusun 11 dokumen kurikulum resmi—mulai dari CP, TP, ATP, Modul Ajar, RPP, hingga Jurnal dan Nilai secara sinkron dan otomatis.
             </p>
 
+            {/* Remembered User Auto-Login Box */}
+            {lastUser && onAutoLogin && (
+              <div className="bg-white/10 border border-emerald-400/50 rounded-2xl p-4 max-w-xl backdrop-blur-md flex flex-col sm:flex-row items-center justify-between gap-3 text-left shadow-lg">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-xl bg-emerald-500 text-white flex items-center justify-center font-bold shrink-0">
+                    <UserCheck className="w-5 h-5" />
+                  </div>
+                  <div className="overflow-hidden">
+                    <span className="text-[10px] uppercase tracking-wider text-emerald-300 font-bold block">
+                      Akun Guru Anda Terdeteksi
+                    </span>
+                    <span className="text-sm font-bold text-white block truncate">
+                      {lastUser.name}
+                    </span>
+                    <span className="text-xs text-blue-200 block truncate">
+                      {lastUser.email} • {lastUser.schoolProfile.name}
+                    </span>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => onAutoLogin(lastUser)}
+                  className="w-full sm:w-auto px-4 py-2.5 bg-gradient-to-r from-emerald-400 to-green-500 hover:from-emerald-300 hover:to-green-400 text-slate-950 font-black text-xs rounded-xl shadow transition-all whitespace-nowrap"
+                >
+                  Masuk Otomatis →
+                </button>
+              </div>
+            )}
+
             {/* CTAs */}
-            <div className="pt-4 flex flex-col sm:flex-row items-center justify-center lg:justify-start gap-4">
+            <div className="pt-2 flex flex-col sm:flex-row items-center justify-center lg:justify-start gap-4">
               <button
                 type="button"
                 onClick={onOpenRegister}
