@@ -6,8 +6,7 @@
 import React, { useState, useEffect } from 'react';
 import { UserAccount, SavedDocument } from './types';
 import {
-  getCurrentUser,
-  setCurrentUser,
+  getActiveSession,
   logoutUser,
   getSavedDocuments,
   saveDocument,
@@ -23,8 +22,10 @@ import { WhatsAppButton } from './components/WhatsAppButton';
 import { Footer } from './components/Footer';
 
 export default function App() {
-  const [currentUser, setUser] = useState<UserAccount>(() => getCurrentUser());
-  const [currentView, setCurrentView] = useState<'landing' | 'dashboard'>('dashboard');
+  const [currentUser, setUser] = useState<UserAccount | null>(() => getActiveSession());
+  const [currentView, setCurrentView] = useState<'landing' | 'dashboard'>(() => {
+    return getActiveSession() ? 'dashboard' : 'landing';
+  });
 
   // Modals state
   const [authModalOpen, setAuthModalOpen] = useState<boolean>(false);
@@ -40,6 +41,8 @@ export default function App() {
     if (currentUser) {
       const docs = getSavedDocuments(currentUser.id);
       setSavedDocs(docs);
+    } else {
+      setSavedDocs([]);
     }
   }, [currentUser]);
 
@@ -55,39 +58,27 @@ export default function App() {
 
   const handleLogout = () => {
     logoutUser();
-    setUser(DEMO_USER); // revert to clean demo profile
+    setUser(null);
     setCurrentView('landing');
   };
 
   const handleSaveDoc = (doc: SavedDocument) => {
+    if (!currentUser) return;
     saveDocument(doc);
     setSavedDocs(getSavedDocuments(currentUser.id));
   };
 
   const handleDeleteDoc = (docId: string) => {
+    if (!currentUser) return;
     deleteDocument(docId);
     setSavedDocs(getSavedDocuments(currentUser.id));
   };
 
   return (
     <div className="min-h-screen flex flex-col bg-slate-50 text-slate-800 selection:bg-blue-900 selection:text-white">
-      {/* Top Banner when viewing Landing Page but logged in */}
-      {currentView === 'landing' && (
-        <div className="bg-blue-950 text-amber-300 px-4 py-2 text-center text-xs font-semibold flex items-center justify-center gap-2">
-          <span>Mode Pratinjau Landing Page.</span>
-          <button
-            type="button"
-            onClick={() => setCurrentView('dashboard')}
-            className="underline font-bold text-white hover:text-amber-200"
-          >
-            Buka Dashboard Administrasi Guru →
-          </button>
-        </div>
-      )}
-
       {/* Main View Router */}
       <div className="flex-1">
-        {currentView === 'landing' ? (
+        {currentView === 'landing' || !currentUser ? (
           <LandingPage
             onOpenRegister={() => {
               setAuthMode('register');
@@ -113,8 +104,8 @@ export default function App() {
         )}
       </div>
 
-      {/* Footer on landing page or main views */}
-      {currentView === 'landing' && (
+      {/* Footer on landing page */}
+      {(currentView === 'landing' || !currentUser) && (
         <Footer onOpenPublishGuide={() => setPublishGuideOpen(true)} />
       )}
 
@@ -130,12 +121,14 @@ export default function App() {
       />
 
       {/* Profile & School Identity Modal */}
-      <ProfileModal
-        isOpen={profileModalOpen}
-        currentUser={currentUser}
-        onClose={() => setProfileModalOpen(false)}
-        onSaved={(updated) => setUser(updated)}
-      />
+      {currentUser && (
+        <ProfileModal
+          isOpen={profileModalOpen}
+          currentUser={currentUser}
+          onClose={() => setProfileModalOpen(false)}
+          onSaved={(updated) => setUser(updated)}
+        />
+      )}
 
       {/* Netlify & GitHub Deployment Guide Modal */}
       <PublishGuideModal

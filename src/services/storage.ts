@@ -51,7 +51,7 @@ const CURRENT_USER_KEY = 'eduplan_current_user_v1';
 const DOCUMENTS_KEY = 'eduplan_documents_v1';
 const STUDENTS_KEY = 'eduplan_students_v1';
 
-export function getCurrentUser(): UserAccount {
+export function getActiveSession(): UserAccount | null {
   try {
     const raw = localStorage.getItem(CURRENT_USER_KEY);
     if (raw) {
@@ -60,16 +60,16 @@ export function getCurrentUser(): UserAccount {
         return parsed;
       }
     }
-    // If current session is empty, check if there are any previously registered users
-    const registered = getRegisteredUsers();
-    if (registered.length > 0) {
-      // Automatically keep the user logged in!
-      const lastUser = registered[registered.length - 1];
-      localStorage.setItem(CURRENT_USER_KEY, JSON.stringify(lastUser));
-      return lastUser;
-    }
   } catch (e) {
-    console.error('Failed to load current user', e);
+    console.error('Failed to load active session', e);
+  }
+  return null;
+}
+
+export function getCurrentUser(): UserAccount {
+  const active = getActiveSession();
+  if (active) {
+    return active;
   }
   return DEMO_USER;
 }
