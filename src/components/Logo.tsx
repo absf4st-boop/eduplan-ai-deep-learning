@@ -4,13 +4,17 @@ interface LogoProps {
   size?: 'sm' | 'md' | 'lg' | 'xl';
   showSubtitle?: boolean;
   inverted?: boolean;
+  variant?: 'light' | 'dark';
 }
 
 export const Logo: React.FC<LogoProps> = ({
   size = 'md',
   showSubtitle = true,
   inverted = false,
+  variant,
 }) => {
+  const isLight = variant === 'light' || inverted;
+
   const iconDimensions = {
     sm: 32,
     md: 42,
@@ -35,10 +39,8 @@ export const Logo: React.FC<LogoProps> = ({
           fill="none"
           xmlns="http://www.w3.org/2000/svg"
         >
-          {/* Subtle Outer Glow Circle */}
           <circle cx="50" cy="50" r="46" stroke="#fbbf24" strokeWidth="1.5" strokeDasharray="3 3" opacity="0.6" />
           
-          {/* Open Book Wings */}
           <path
             d="M 50 74 C 42 70 28 69 16 73 L 16 35 C 28 31 42 32 50 36 Z"
             fill="#ffffff"
@@ -56,7 +58,6 @@ export const Logo: React.FC<LogoProps> = ({
             strokeLinecap="round"
           />
 
-          {/* Central AI Microchip Core in Gold */}
           <rect
             x="38"
             y="30"
@@ -68,31 +69,27 @@ export const Logo: React.FC<LogoProps> = ({
             strokeWidth="2"
           />
           
-          {/* Neural Node Circuits */}
           <circle cx="50" cy="42" r="4.5" fill="#fbbf24" />
           <line x1="50" y1="30" x2="50" y2="24" stroke="#fbbf24" strokeWidth="2" strokeLinecap="round" />
           <line x1="50" y1="54" x2="50" y2="60" stroke="#fbbf24" strokeWidth="2" strokeLinecap="round" />
           <line x1="38" y1="42" x2="32" y2="42" stroke="#fbbf24" strokeWidth="2" strokeLinecap="round" />
           <line x1="62" y1="42" x2="68" y2="42" stroke="#fbbf24" strokeWidth="2" strokeLinecap="round" />
           
-          {/* Innovation Spark Dots */}
           <circle cx="50" cy="22" r="2.5" fill="#fde047" />
           <circle cx="50" cy="62" r="2.5" fill="#fde047" />
           <circle cx="30" cy="42" r="2.5" fill="#fde047" />
           <circle cx="70" cy="42" r="2.5" fill="#fde047" />
         </svg>
 
-        {/* Small gold sparkle overlay */}
         <div className="absolute -top-1 -right-1 w-3 h-3 bg-amber-400 rounded-full blur-[1px] animate-pulse" />
       </div>
 
-      {/* Brand Name & Subtitle */}
       <div>
         <div className="flex items-center gap-1.5 leading-tight">
           <span
             className={`font-black tracking-tight font-sans ${
               size === 'sm' ? 'text-lg' : size === 'lg' ? 'text-2xl' : size === 'xl' ? 'text-3xl' : 'text-xl'
-            } ${inverted ? 'text-white' : 'text-blue-900'}`}
+            } ${isLight ? 'text-white' : 'text-blue-900'}`}
           >
             EDU PLAN <span className="text-amber-500">AI</span>
           </span>
@@ -101,8 +98,8 @@ export const Logo: React.FC<LogoProps> = ({
           <div className="flex items-center gap-1.5 mt-0.5">
             <span
               className={`font-bold tracking-wider uppercase text-[10px] px-1.5 py-0.5 rounded ${
-                inverted
-                  ? 'bg-amber-400 text-blue-950'
+                isLight
+                  ? 'bg-amber-400 text-blue-950 font-extrabold'
                   : 'bg-blue-900 text-amber-300 font-extrabold'
               }`}
             >
@@ -110,7 +107,7 @@ export const Logo: React.FC<LogoProps> = ({
             </span>
             <span
               className={`text-[10px] hidden sm:inline ${
-                inverted ? 'text-blue-200' : 'text-slate-500'
+                isLight ? 'text-blue-200' : 'text-slate-500'
               }`}
             >
               Guru SD

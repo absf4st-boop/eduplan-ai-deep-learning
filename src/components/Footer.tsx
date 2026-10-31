@@ -1,97 +1,127 @@
 import React from 'react';
 import { Logo } from './Logo';
-import { MessageCircle, Heart, Shield, BookOpen, Sparkles, Send } from 'lucide-react';
+import { ShieldCheck, Heart, Sparkles, Phone, Mail } from 'lucide-react';
 
 interface FooterProps {
   onOpenPublishGuide?: () => void;
+  onOpenAuth?: (tab: 'login' | 'register') => void;
 }
 
-export const Footer: React.FC<FooterProps> = ({ onOpenPublishGuide }) => {
+export const Footer: React.FC<FooterProps> = ({ onOpenPublishGuide, onOpenAuth }) => {
   return (
-    <footer className="bg-slate-900 text-slate-300 border-t border-slate-800 mt-auto">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10">
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-8 mb-8">
-          {/* Brand info */}
-          <div className="md:col-span-2">
-            <Logo size="md" inverted={true} />
-            <p className="mt-3 text-sm text-slate-400 max-w-md leading-relaxed">
-              <strong>Solusi Cerdas Administrasi Pembelajaran Mendalam Guru Sekolah Dasar</strong>. Membantu guru SD di seluruh Indonesia menyusun CP, TP, ATP, Modul Ajar, RPP, PROTA, PROMES, LKPD, Jurnal, dan Nilai berbasis prinsip <em>Berkesadaran (Mindful)</em>, <em>Bermakna (Meaningful)</em>, dan <em>Menggembirakan (Joyful)</em>.
+    <footer className="bg-slate-900 text-slate-300 pt-16 pb-12 border-t border-slate-800">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-10 mb-12">
+          {/* Brand */}
+          <div className="space-y-4 md:col-span-1">
+            <Logo size="md" variant="light" />
+            <p className="text-xs text-slate-400 leading-relaxed">
+              Platform administrasi pembelajaran mendalam (Deep Learning) berbasis kecerdasan buatan untuk Guru Sekolah Dasar di seluruh Indonesia.
             </p>
-            <div className="mt-4 flex items-center gap-2 text-xs text-amber-400 font-medium">
-              <Sparkles className="w-4 h-4" />
-              <span>Teknologi Generasi AI Terintegrasi & Kurikulum Nasional SD</span>
+            <div className="flex items-center gap-2 text-xs text-amber-400 bg-amber-950/40 border border-amber-800/40 rounded-lg p-2.5">
+              <Sparkles className="w-4 h-4 shrink-0" />
+              <span>Prinsip: Berkesadaran, Bermakna & Menggembirakan</span>
             </div>
           </div>
 
-          {/* Kontak & Bantuan */}
+          {/* Navigasi Cepat */}
           <div>
-            <h4 className="text-white text-sm font-semibold tracking-wider uppercase mb-3 flex items-center gap-1.5">
-              <MessageCircle className="w-4 h-4 text-emerald-400" />
-              Bantuan Pengembang
-            </h4>
-            <ul className="space-y-2 text-sm text-slate-400">
+            <h4 className="text-white font-semibold text-sm mb-4 tracking-wide uppercase">Navigasi Utama</h4>
+            <ul className="space-y-2.5 text-xs">
               <li>
-                <span className="text-slate-500 text-xs block">Developer:</span>
-                <span className="text-slate-200 font-semibold">huseinapriyanto</span>
+                <button
+                  onClick={() => onOpenAuth ? onOpenAuth('login') : window.scrollTo({ top: 0, behavior: 'smooth' })}
+                  className="hover:text-amber-400 transition cursor-pointer"
+                >
+                  Masuk ke Dashboard Guru
+                </button>
               </li>
               <li>
-                <span className="text-slate-500 text-xs block">WhatsApp Resmi:</span>
+                <button
+                  onClick={() => onOpenAuth ? onOpenAuth('register') : window.scrollTo({ top: 0, behavior: 'smooth' })}
+                  className="hover:text-amber-400 transition cursor-pointer"
+                >
+                  Registrasi Akun Baru (OTP)
+                </button>
+              </li>
+              <li>
+                <a href="#fitur" className="hover:text-amber-400 transition">
+                  11 Menu Administrasi Lengkap
+                </a>
+              </li>
+              <li>
+                <a href="#deep-learning" className="hover:text-amber-400 transition">
+                  Konsep Deep Learning SD
+                </a>
+              </li>
+              {onOpenPublishGuide && (
+                <li>
+                  <button
+                    onClick={onOpenPublishGuide}
+                    className="text-amber-400 hover:text-amber-300 font-medium underline flex items-center gap-1 cursor-pointer"
+                  >
+                    🚀 Panduan Publikasi GitHub & Netlify
+                  </button>
+                </li>
+              )}
+            </ul>
+          </div>
+
+          {/* 11 Administrasi */}
+          <div>
+            <h4 className="text-white font-semibold text-sm mb-4 tracking-wide uppercase">Administrasi SD</h4>
+            <div className="grid grid-cols-2 gap-x-2 gap-y-1.5 text-xs text-slate-400">
+              <span>• RPP Merdeka</span>
+              <span>• Modul Ajar</span>
+              <span>• TP & ATP</span>
+              <span>• Capaian (CP)</span>
+              <span>• Prota & Promes</span>
+              <span>• LKPD Kreatif</span>
+              <span>• Jurnal Harian</span>
+              <span>• Presensi Siswa</span>
+              <span>• Daftar Nilai</span>
+              <span>• Ekspor Word & PDF</span>
+            </div>
+          </div>
+
+          {/* Kontak Pengembang */}
+          <div>
+            <h4 className="text-white font-semibold text-sm mb-4 tracking-wide uppercase">Kontak Pengembang</h4>
+            <div className="space-y-3 text-xs">
+              <p className="text-slate-400">
+                Dikembangkan dengan dedikasi untuk memajukan pendidikan Sekolah Dasar di Indonesia:
+              </p>
+              <div className="bg-slate-800/80 p-3 rounded-lg border border-slate-700/60 space-y-2">
+                <div className="font-semibold text-white">huseinapriyanto</div>
                 <a
                   href="https://wa.me/6285725080078"
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="inline-flex items-center gap-1.5 text-emerald-400 hover:text-emerald-300 font-medium transition-colors"
+                  className="flex items-center gap-2 text-emerald-400 hover:text-emerald-300 font-medium transition"
                 >
-                  <Send className="w-3.5 h-3.5" />
-                  085725080078
+                  <Phone className="w-3.5 h-3.5" />
+                  <span>WhatsApp: 085725080078</span>
                 </a>
-              </li>
-              <li>
-                <span className="text-slate-500 text-xs block">Dukungan:</span>
-                <span className="text-slate-300">Konsultasi Teknis & Kurikulum</span>
-              </li>
-            </ul>
-          </div>
-
-          {/* Quick links & Publishing */}
-          <div>
-            <h4 className="text-white text-sm font-semibold tracking-wider uppercase mb-3 flex items-center gap-1.5">
-              <BookOpen className="w-4 h-4 text-blue-400" />
-              Panduan & Deploy
-            </h4>
-            <ul className="space-y-2 text-sm">
-              <li>
-                <button
-                  type="button"
-                  onClick={onOpenPublishGuide}
-                  className="text-amber-400 hover:text-amber-300 font-medium flex items-center gap-1.5 text-left transition-colors"
-                >
-                  <span>🚀 Panduan GitHub & Netlify</span>
-                </button>
-              </li>
-              <li>
-                <span className="text-slate-400 text-xs">
-                  Panduan langkah demi langkah mem-publish aplikasi ke GitHub dan Netlify SaaS.
-                </span>
-              </li>
-              <li className="pt-2">
-                <div className="flex items-center gap-1 text-xs text-slate-500">
-                  <Shield className="w-3.5 h-3.5 text-blue-400" />
-                  <span>Ruang Kerja Terisolasi per Akun Guru</span>
+                <div className="flex items-center gap-2 text-slate-400">
+                  <ShieldCheck className="w-3.5 h-3.5 text-blue-400" />
+                  <span>Dukungan Teknis Langsung</span>
                 </div>
-              </li>
-            </ul>
+              </div>
+            </div>
           </div>
         </div>
 
-        {/* Bottom copyright */}
-        <div className="pt-6 border-t border-slate-800 flex flex-col sm:flex-row items-center justify-between text-xs text-slate-400 gap-3">
-          <p className="font-medium text-slate-300">
-            © 2026 EDU PLAN AI | Developed by huseinapriyanto
-          </p>
-          <div className="flex items-center gap-2 text-slate-400">
-            <span>Didedikasikan untuk kemajuan Pendidikan Guru SD Indonesia</span>
-            <Heart className="w-3.5 h-3.5 text-red-500 fill-red-500" />
+        {/* Bottom line */}
+        <div className="pt-8 border-t border-slate-800 flex flex-col sm:flex-row items-center justify-between text-xs text-slate-400 gap-4">
+          <p>© 2026 EDU PLAN AI | Developed by huseinapriyanto</p>
+          <div className="flex items-center gap-4">
+            <span className="flex items-center gap-1.5">
+              <span>Dibuat dengan</span>
+              <Heart className="w-3.5 h-3.5 text-rose-500 fill-rose-500" />
+              <span>untuk Guru SD Indonesia</span>
+            </span>
+            <span>•</span>
+            <span>Versi 2.5 (Deep Learning AI Ready)</span>
           </div>
         </div>
       </div>

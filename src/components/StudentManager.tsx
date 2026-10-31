@@ -1,35 +1,39 @@
 import React, { useState } from 'react';
-import { Plus, Trash2, Edit2, Check, X, Users, AlertCircle } from 'lucide-react';
 import { Student } from '../types';
-import { saveStudents } from '../services/storage';
+import { getStudents, saveStudent, deleteStudent } from '../services/storage';
+import { Users, Plus, Trash2, Edit2, Check, X, Sparkles, Search } from 'lucide-react';
 
 interface StudentManagerProps {
   userId: string;
-  students: Student[];
   grade: string;
-  onUpdateStudents: (updated: Student[]) => void;
+  onStudentsUpdated?: () => void;
 }
 
 export const StudentManager: React.FC<StudentManagerProps> = ({
   userId,
-  students,
   grade,
-  onUpdateStudents,
+  onStudentsUpdated,
 }) => {
+  const [students, setStudents] = useState<Student[]>(() => getStudents(userId));
+  const [search, setSearch] = useState('');
   const [isAdding, setIsAdding] = useState(false);
-  const [editingId, setEditingId] = useState<string | null>(null);
 
   // New student form
   const [nisn, setNisn] = useState('');
   const [name, setName] = useState('');
   const [gender, setGender] = useState<'L' | 'P'>('L');
 
-  // Edit student form
-  const [editNisn, setEditNisn] = useState('');
+  // Editing state
+  const [editingId, setEditingId] = useState<string | null>(null);
   const [editName, setEditName] = useState('');
+  const [editNisn, setEditNisn] = useState('');
   const [editGender, setEditGender] = useState<'L' | 'P'>('L');
 
-  const filteredStudents = students.filter((s) => s.grade === grade);
+  const refreshList = () => {
+    const list = getStudents(userId);
+    setStudents(list);
+    if (onStudentsUpdated) onStudentsUpdated();
+  };
 
   const handleAdd = (e: React.FormEvent) => {
     e.preventDefault();
@@ -37,21 +41,21 @@ export const StudentManager: React.FC<StudentManagerProps> = ({
 
     const newStudent: Student = {
       id: 'std_' + Date.now(),
-      nisn: nisn.trim() || `012345${Math.floor(1000 + Math.random() * 9000)}`,
+      userId,
+      nisn: nisn.trim() || String(Math.floor(1000000000 + Math.random() * 9000000000)),
       name: name.trim(),
       gender,
       grade,
     };
 
-    const updated = [...students, newStudent];
-    saveStudents(userId, updated);
-    onUpdateStudents(updated);
-    setIsAdding(false);
+    saveStudent(newStudent);
     setName('');
     setNisn('');
+    setIsAdding(false);
+    refreshList();
   };
 
-  const startEdit = (s: Student) => {
+  const handleStartEdit = (s: Student) => {
     setEditingId(s.id);
     setEditName(s.name);
     setEditNisn(s.nisn);
@@ -59,205 +63,263 @@ export const StudentManager: React.FC<StudentManagerProps> = ({
   };
 
   const handleSaveEdit = (id: string) => {
-    const updated = students.map((s) =>
-      s.id === id ? { ...s, name: editName, nisn: editNisn, gender: editGender } : s
-    );
-    saveStudents(userId, updated);
-    onUpdateStudents(updated);
+    const existing = students.find((s) => s.id === id);
+    if (!existing) return;
+
+    const updated: Student = {
+      ...existing,
+      name: editName.trim(),
+      nisn: editNisn.trim(),
+      gender: editGender,
+    };
+
+    saveStudent(updated);
     setEditingId(null);
+    refreshList();
   };
 
   const handleDelete = (id: string) => {
-    if (confirm('Hapus data siswa ini dari daftar kelas?')) {
-      const updated = students.filter((s) => s.id !== id);
-      saveStudents(userId, updated);
-      onUpdateStudents(updated);
+    if (window.confirm('Hapus data siswa ini dari daftar kelas?')) {
+      deleteStudent(id);
+      refreshList();
     }
   };
 
+  const handleSeedDemoStudents = () => {
+    const demoNames: [string, 'L' | 'P'][] = [
+      ['Ahmad Farhan Pratama', 'L'],
+      ['Anindya Zahra Safitri', 'P'],
+      ['Bagus Dwi Wicaksono', 'L'],
+      ['Citra Kirana Dewi', 'P'],
+      ['Dimas Aditya Nugraha', 'L'],
+      ['Eka Putri Handayani', 'P'],
+      ['Fajar Hidayatullah', 'L'],
+      ['Gita Maharani', 'P'],
+      ['Hafiz Al-Ghazali', 'L'],
+      ['Indah Permata Sari', 'P'],
+    ];
+
+    demoNames.forEach(([sName, sGender], idx) => {
+      saveStudent({
+        id: 'demo_std_' + idx + '_' + Date.now(),
+        userId,
+        nisn: `00${idx + 1}4592${idx + 10}`,
+        name: sName,
+        gender: sGender,
+        grade,
+      });
+    });
+
+    refreshList();
+  };
+
+  const filtered = students.filter(
+    (s) =>
+      s.name.toLowerCase().includes(search.toLowerCase()) ||
+      s.nisn.includes(search)
+  );
+
   return (
-    <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden mb-6">
-      <div className="px-6 py-4 bg-slate-50 border-b border-slate-200 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-        <div className="flex items-center gap-2.5">
-          <div className="p-2 bg-blue-100 text-blue-900 rounded-lg">
-            <Users className="w-5 h-5" />
-          </div>
-          <div>
-            <h3 className="font-bold text-slate-900 text-base">
-              Database Peserta Didik (Kelas {grade})
-            </h3>
-            <p className="text-xs text-slate-500">
-              Total: {filteredStudents.length} siswa aktif. Terhubung ke menu Daftar Hadir & Daftar Nilai.
-            </p>
-          </div>
+    <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6 space-y-4">
+      {/* Header */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-slate-100">
+        <div>
+          <h3 className="font-bold text-slate-900 text-sm flex items-center gap-2">
+            <Users className="w-4 h-4 text-blue-700" />
+            <span>Daftar Peserta Didik (Kelas {grade})</span>
+          </h3>
+          <p className="text-xs text-slate-500 mt-0.5">
+            Total {students.length} siswa tercatat. Data siswa terhubung otomatis ke Daftar Hadir & Daftar Nilai.
+          </p>
         </div>
 
-        <button
-          type="button"
-          onClick={() => setIsAdding(!isAdding)}
-          className="inline-flex items-center gap-1.5 px-3.5 py-2 bg-blue-900 hover:bg-blue-800 text-white rounded-xl text-xs font-bold transition-all shadow-sm"
-        >
-          {isAdding ? <X className="w-4 h-4" /> : <Plus className="w-4 h-4" />}
-          <span>{isAdding ? 'Batal' : 'Tambah Siswa Baru'}</span>
-        </button>
+        <div className="flex items-center gap-2">
+          {students.length === 0 && (
+            <button
+              onClick={handleSeedDemoStudents}
+              className="px-3 py-1.5 bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-300 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition cursor-pointer"
+            >
+              <Sparkles className="w-3.5 h-3.5 text-amber-600" />
+              <span>Isi 10 Siswa Contoh</span>
+            </button>
+          )}
+
+          <button
+            onClick={() => setIsAdding(!isAdding)}
+            className="px-3 py-1.5 bg-blue-700 hover:bg-blue-800 text-white rounded-xl text-xs font-semibold flex items-center gap-1.5 transition cursor-pointer"
+          >
+            <Plus className="w-3.5 h-3.5" />
+            <span>Tambah Siswa</span>
+          </button>
+        </div>
       </div>
 
-      {/* Add Form */}
+      {/* Add form */}
       {isAdding && (
-        <form onSubmit={handleAdd} className="p-4 bg-blue-50/60 border-b border-blue-100 flex flex-wrap gap-3 items-end">
-          <div className="w-32">
-            <label className="block text-[11px] font-bold text-slate-700 mb-1">NISN</label>
-            <input
-              type="text"
-              placeholder="0123456789"
-              value={nisn}
-              onChange={(e) => setNisn(e.target.value)}
-              className="w-full px-2.5 py-1.5 text-xs border border-slate-300 rounded-lg bg-white focus:ring-2 focus:ring-blue-500"
-            />
+        <form onSubmit={handleAdd} className="p-4 bg-blue-50/70 border border-blue-200 rounded-xl space-y-3">
+          <h4 className="text-xs font-bold text-blue-900">Form Tambah Peserta Didik Baru</h4>
+          <div className="grid grid-cols-1 sm:grid-cols-4 gap-2.5">
+            <div className="sm:col-span-2">
+              <input
+                type="text"
+                required
+                placeholder="Nama Lengkap Siswa"
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                className="w-full px-3 py-1.5 bg-white border border-slate-300 rounded-lg text-xs focus:ring-2 focus:ring-blue-600 focus:outline-none"
+              />
+            </div>
+            <div>
+              <input
+                type="text"
+                placeholder="NISN Siswa"
+                value={nisn}
+                onChange={(e) => setNisn(e.target.value)}
+                className="w-full px-3 py-1.5 bg-white border border-slate-300 rounded-lg text-xs focus:ring-2 focus:ring-blue-600 focus:outline-none"
+              />
+            </div>
+            <div className="flex gap-2">
+              <select
+                value={gender}
+                onChange={(e) => setGender(e.target.value as 'L' | 'P')}
+                className="flex-1 px-2.5 py-1.5 bg-white border border-slate-300 rounded-lg text-xs focus:ring-2 focus:ring-blue-600 focus:outline-none font-medium"
+              >
+                <option value="L">Laki-laki (L)</option>
+                <option value="P">Perempuan (P)</option>
+              </select>
+              <button
+                type="submit"
+                className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white font-semibold rounded-lg text-xs transition cursor-pointer"
+              >
+                Simpan
+              </button>
+            </div>
           </div>
-          <div className="flex-1 min-w-[200px]">
-            <label className="block text-[11px] font-bold text-slate-700 mb-1">Nama Lengkap Siswa *</label>
-            <input
-              type="text"
-              required
-              placeholder="Contoh: Muhammad Rizki"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              className="w-full px-2.5 py-1.5 text-xs border border-slate-300 rounded-lg bg-white focus:ring-2 focus:ring-blue-500"
-            />
-          </div>
-          <div className="w-24">
-            <label className="block text-[11px] font-bold text-slate-700 mb-1">L/P</label>
-            <select
-              value={gender}
-              onChange={(e) => setGender(e.target.value as 'L' | 'P')}
-              className="w-full px-2.5 py-1.5 text-xs border border-slate-300 rounded-lg bg-white focus:ring-2 focus:ring-blue-500"
-            >
-              <option value="L">Laki-laki</option>
-              <option value="P">Perempuan</option>
-            </select>
-          </div>
-          <button
-            type="submit"
-            className="px-4 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-bold shadow-sm transition-colors"
-          >
-            Simpan Siswa
-          </button>
         </form>
       )}
 
-      {/* Students Table */}
-      <div className="overflow-x-auto">
-        {filteredStudents.length === 0 ? (
-          <div className="p-6 text-center text-sm text-slate-400 flex items-center justify-center gap-2">
-            <AlertCircle className="w-4 h-4" />
-            <span>Belum ada data siswa untuk Kelas {grade}. Klik tombol Tambah Siswa di atas.</span>
-          </div>
-        ) : (
-          <table className="w-full text-xs text-left">
-            <thead className="bg-slate-100 text-slate-700 uppercase font-bold text-[10px] tracking-wider">
+      {/* Search Bar */}
+      <div className="relative">
+        <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-2.5" />
+        <input
+          type="text"
+          placeholder="Cari siswa berdasarkan nama atau NISN..."
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          className="w-full pl-9 pr-3 py-1.5 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:ring-2 focus:ring-blue-600 focus:outline-none"
+        />
+      </div>
+
+      {/* Table */}
+      <div className="overflow-x-auto border border-slate-200 rounded-xl">
+        <table className="w-full text-xs text-left">
+          <thead className="bg-slate-50 text-slate-600 uppercase font-semibold text-[11px] border-b border-slate-200">
+            <tr>
+              <th className="py-2.5 px-3 w-12 text-center">No</th>
+              <th className="py-2.5 px-3">Nama Siswa</th>
+              <th className="py-2.5 px-3 w-28">NISN</th>
+              <th className="py-2.5 px-3 w-16 text-center">L/P</th>
+              <th className="py-2.5 px-3 w-24 text-center">Aksi</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-slate-100">
+            {filtered.length === 0 ? (
               <tr>
-                <th className="px-4 py-3 w-12 text-center">No</th>
-                <th className="px-4 py-3 w-32">NISN</th>
-                <th className="px-4 py-3">Nama Lengkap Siswa</th>
-                <th className="px-4 py-3 w-20 text-center">L/P</th>
-                <th className="px-4 py-3 w-28 text-center">Aksi</th>
+                <td colSpan={5} className="py-8 text-center text-slate-400">
+                  Belum ada peserta didik. Klik <strong>Tambah Siswa</strong> atau <strong>Isi 10 Siswa Contoh</strong>.
+                </td>
               </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100">
-              {filteredStudents.map((s, idx) => (
-                <tr key={s.id} className="hover:bg-slate-50 transition-colors">
-                  <td className="px-4 py-2.5 text-center font-bold text-slate-500">{idx + 1}</td>
-                  <td className="px-4 py-2.5 font-mono text-slate-600">
-                    {editingId === s.id ? (
-                      <input
-                        type="text"
-                        value={editNisn}
-                        onChange={(e) => setEditNisn(e.target.value)}
-                        className="px-2 py-1 text-xs border border-slate-300 rounded w-28"
-                      />
-                    ) : (
-                      s.nisn
-                    )}
-                  </td>
-                  <td className="px-4 py-2.5 font-semibold text-slate-800">
-                    {editingId === s.id ? (
-                      <input
-                        type="text"
-                        value={editName}
-                        onChange={(e) => setEditName(e.target.value)}
-                        className="px-2 py-1 text-xs border border-slate-300 rounded w-full"
-                      />
-                    ) : (
-                      s.name
-                    )}
-                  </td>
-                  <td className="px-4 py-2.5 text-center">
-                    {editingId === s.id ? (
-                      <select
-                        value={editGender}
-                        onChange={(e) => setEditGender(e.target.value as 'L' | 'P')}
-                        className="px-1 py-1 text-xs border border-slate-300 rounded"
-                      >
-                        <option value="L">L</option>
-                        <option value="P">P</option>
-                      </select>
-                    ) : (
-                      <span
-                        className={`inline-block px-2 py-0.5 rounded-full text-[10px] font-bold ${
-                          s.gender === 'L' ? 'bg-blue-100 text-blue-700' : 'bg-pink-100 text-pink-700'
-                        }`}
-                      >
-                        {s.gender}
-                      </span>
-                    )}
-                  </td>
-                  <td className="px-4 py-2.5 text-center">
-                    {editingId === s.id ? (
-                      <div className="flex items-center justify-center gap-1.5">
-                        <button
-                          type="button"
-                          onClick={() => handleSaveEdit(s.id)}
-                          className="p-1 text-emerald-600 hover:bg-emerald-50 rounded"
-                          title="Simpan"
+            ) : (
+              filtered.map((s, idx) => {
+                const isEditing = editingId === s.id;
+                return (
+                  <tr key={s.id} className="hover:bg-slate-50/70 transition">
+                    <td className="py-2 px-3 text-center text-slate-500 font-mono">{idx + 1}</td>
+                    <td className="py-2 px-3">
+                      {isEditing ? (
+                        <input
+                          type="text"
+                          value={editName}
+                          onChange={(e) => setEditName(e.target.value)}
+                          className="w-full px-2 py-1 bg-white border border-blue-400 rounded text-xs"
+                        />
+                      ) : (
+                        <span className="font-semibold text-slate-800">{s.name}</span>
+                      )}
+                    </td>
+                    <td className="py-2 px-3 text-slate-600 font-mono text-[11px]">
+                      {isEditing ? (
+                        <input
+                          type="text"
+                          value={editNisn}
+                          onChange={(e) => setEditNisn(e.target.value)}
+                          className="w-full px-2 py-1 bg-white border border-blue-400 rounded text-xs"
+                        />
+                      ) : (
+                        s.nisn
+                      )}
+                    </td>
+                    <td className="py-2 px-3 text-center">
+                      {isEditing ? (
+                        <select
+                          value={editGender}
+                          onChange={(e) => setEditGender(e.target.value as 'L' | 'P')}
+                          className="px-1 py-1 bg-white border border-blue-400 rounded text-xs"
                         >
-                          <Check className="w-4 h-4" />
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => setEditingId(null)}
-                          className="p-1 text-slate-400 hover:bg-slate-100 rounded"
-                          title="Batal"
+                          <option value="L">L</option>
+                          <option value="P">P</option>
+                        </select>
+                      ) : (
+                        <span
+                          className={`inline-block px-2 py-0.5 rounded text-[10px] font-bold ${
+                            s.gender === 'L' ? 'bg-blue-100 text-blue-800' : 'bg-pink-100 text-pink-800'
+                          }`}
                         >
-                          <X className="w-4 h-4" />
-                        </button>
+                          {s.gender}
+                        </span>
+                      )}
+                    </td>
+                    <td className="py-2 px-3 text-center">
+                      <div className="flex items-center justify-center gap-1">
+                        {isEditing ? (
+                          <>
+                            <button
+                              onClick={() => handleSaveEdit(s.id)}
+                              className="p-1 text-emerald-600 hover:bg-emerald-50 rounded"
+                            >
+                              <Check className="w-3.5 h-3.5" />
+                            </button>
+                            <button
+                              onClick={() => setEditingId(null)}
+                              className="p-1 text-slate-500 hover:bg-slate-100 rounded"
+                            >
+                              <X className="w-3.5 h-3.5" />
+                            </button>
+                          </>
+                        ) : (
+                          <>
+                            <button
+                              onClick={() => handleStartEdit(s)}
+                              className="p-1 text-blue-600 hover:bg-blue-50 rounded"
+                            >
+                              <Edit2 className="w-3.5 h-3.5" />
+                            </button>
+                            <button
+                              onClick={() => handleDelete(s.id)}
+                              className="p-1 text-rose-600 hover:bg-rose-50 rounded"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          </>
+                        )}
                       </div>
-                    ) : (
-                      <div className="flex items-center justify-center gap-1.5">
-                        <button
-                          type="button"
-                          onClick={() => startEdit(s)}
-                          className="p-1 text-blue-600 hover:bg-blue-50 rounded transition-colors"
-                          title="Ubah"
-                        >
-                          <Edit2 className="w-3.5 h-3.5" />
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => handleDelete(s.id)}
-                          className="p-1 text-red-500 hover:bg-red-50 rounded transition-colors"
-                          title="Hapus"
-                        >
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </button>
-                      </div>
-                    )}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        )}
+                    </td>
+                  </tr>
+                );
+              })
+            )}
+          </tbody>
+        </table>
       </div>
     </div>
   );

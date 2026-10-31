@@ -1,188 +1,220 @@
 import React, { useState } from 'react';
-import { Student } from '../types';
-import { Award, Printer, FileDown, Sliders, AlertTriangle, CheckCircle2 } from 'lucide-react';
-import { printOrExportPdf, downloadWordDocument } from '../utils/exportUtils';
+import { UserAccount, Student } from '../types';
+import { getStudents } from '../services/storage';
+import { downloadWordDocument, printOrExportPdf } from '../utils/exportUtils';
+import { Award, FileDown, Printer, Save, CheckCircle2, Calculator, Info } from 'lucide-react';
 
-interface GradesProps {
-  students: Student[];
-  grade: string;
-  subject: string;
-  semester: string;
-  schoolYear: string;
-  material: string;
-  schoolName: string;
-  teacherName: string;
+interface InteractiveGradesProps {
+  user: UserAccount;
+  onSaveAsDocument?: (title: string, content: string) => void;
 }
 
-interface StudentGrade {
-  diagnostik: number;
-  formatif: number;
-  praktik: number;
-  proyek: number;
-  tugas: number;
-  refleksi: number;
-  sumatif: number;
-}
-
-export const InteractiveGrades: React.FC<GradesProps> = ({
-  students,
-  grade,
-  subject,
-  semester,
-  schoolYear,
-  material,
-  schoolName,
-  teacherName,
+export const InteractiveGrades: React.FC<InteractiveGradesProps> = ({
+  user,
+  onSaveAsDocument,
 }) => {
-  const filteredStudents = students.filter((s) => s.grade === grade);
+  const students = getStudents(user.id);
+  const [grade, setGrade] = useState(user.schoolProfile.activeGrade || '5');
+  const [subject, setSubject] = useState(user.schoolProfile.activeSubject || 'PJOK');
+  const [semester, setSemester] = useState<'1 (Ganjil)' | '2 (Genap)'>('1 (Ganjil)');
+  const [academicYear, setAcademicYear] = useState(user.schoolProfile.academicYear || '2026/2027');
 
-  // Bobot penilaian (dapat diatur oleh guru)
-  const [showWeightsConfig, setShowWeightsConfig] = useState(false);
-  const [weights, setWeights] = useState({
-    formatif: 20,
-    praktik: 25,
-    proyek: 20,
-    tugas: 15,
-    refleksi: 10,
-    sumatif: 10,
-  });
-
-  const [grades, setGrades] = useState<Record<string, StudentGrade>>(() => {
-    const initial: Record<string, StudentGrade> = {};
-    const sampleScores = [
-      { diagnostik: 85, formatif: 88, praktik: 92, proyek: 90, tugas: 86, refleksi: 92, sumatif: 88 },
-      { diagnostik: 80, formatif: 84, praktik: 86, proyek: 85, tugas: 82, refleksi: 85, sumatif: 84 },
-      { diagnostik: 75, formatif: 78, praktik: 80, proyek: 82, tugas: 75, refleksi: 80, sumatif: 79 },
-      { diagnostik: 90, formatif: 94, praktik: 95, proyek: 94, tugas: 92, refleksi: 95, sumatif: 93 },
-      { diagnostik: 70, formatif: 72, praktik: 74, proyek: 72, tugas: 70, refleksi: 75, sumatif: 71 },
-    ];
-    filteredStudents.forEach((s, idx) => {
-      initial[s.id] = sampleScores[idx % sampleScores.length];
+  // Grades state: { [studentId]: { tp1: number, tp2: number, tp3: number, sts: number, sas: number } }
+  const [scores, setScores] = useState<Record<string, { tp1: number; tp2: number; tp3: number; sts: number; sas: number }>>(() => {
+    const initial: Record<string, { tp1: number; tp2: number; tp3: number; sts: number; sas: number }> = {};
+    students.forEach((s, idx) => {
+      // Realistic default grades
+      const base = 80 + (idx % 12);
+      initial[s.id] = {
+        tp1: Math.min(100, base + 2),
+        tp2: Math.min(100, base - 1),
+        tp3: Math.min(100, base + 4),
+        sts: Math.min(100, base),
+        sas: Math.min(100, base + 3),
+      };
     });
     return initial;
   });
 
-  const updateScore = (studentId: string, field: keyof StudentGrade, val: number) => {
-    setGrades((prev) => ({
+  const [savedAlert, setSavedAlert] = useState(false);
+
+  const handleScoreChange = (
+    studentId: string,
+    field: 'tp1' | 'tp2' | 'tp3' | 'sts' | 'sas',
+    val: number
+  ) => {
+    const clamped = isNaN(val) ? 0 : Math.max(0, Math.min(100, val));
+    setScores((prev) => ({
       ...prev,
       [studentId]: {
-        ...(prev[studentId] || { diagnostik: 75, formatif: 75, praktik: 75, proyek: 75, tugas: 75, refleksi: 75, sumatif: 75 }),
-        [field]: Math.min(100, Math.max(0, val)),
+        ...(prev[studentId] || { tp1: 80, tp2: 80, tp3: 80, sts: 80, sas: 80 }),
+        [field]: clamped,
       },
     }));
   };
 
-  const calculateFinalScore = (g: StudentGrade) => {
-    const totalWeight =
-      weights.formatif + weights.praktik + weights.proyek + weights.tugas + weights.refleksi + weights.sumatif;
-    const weightedSum =
-      g.formatif * weights.formatif +
-      g.praktik * weights.praktik +
-      g.proyek * weights.proyek +
-      g.tugas * weights.tugas +
-      g.refleksi * weights.refleksi +
-      g.sumatif * weights.sumatif;
-    return Number((weightedSum / (totalWeight || 1)).toFixed(1));
-  };
+  const calculateFinal = (studentId: string) => {
+    const s = scores[studentId] || { tp1: 80, tp2: 80, tp3: 80, sts: 80, sas: 80 };
+    // Formula Kurikulum Merdeka / Deep Learning:
+    // Rata-rata Formatif TP (50%) + Sumatif STS (25%) + Sumatif SAS (25%)
+    const avgTp = (s.tp1 + s.tp2 + s.tp3) / 3;
+    const finalScore = Math.round(avgTp * 0.5 + s.sts * 0.25 + s.sas * 0.25);
 
-  const getAchievementDesc = (finalScore: number, studentName: string) => {
-    if (finalScore >= 88) {
-      return `Sangat mahir memahami konsep ${material} dan aktif mendemonstrasikan sikap profil lulusan.`;
-    } else if (finalScore >= 75) {
-      return `Mencapai kompetensi dengan baik dalam aspek praktik dan kerja sama materi ${material}.`;
+    let predicate = 'C';
+    let desc = 'Mulai menunjukkan pemahaman dalam pembelajaran mendalam.';
+    if (finalScore >= 90) {
+      predicate = 'A';
+      desc = 'Sangat baik dan mandiri dalam menguasai konsep esensial serta mampu merefleksikan praktik pembelajaran mendalam dengan kritis dan antusias.';
+    } else if (finalScore >= 80) {
+      predicate = 'B';
+      desc = 'Telah mencapai tujuan pembelajaran secara bermakna dan mampu mengaplikasikan keterampilan belajar dengan konsisten dan berkesadaran.';
+    } else if (finalScore >= 70) {
+      predicate = 'C';
+      desc = 'Cukup terampil dalam capaian pembelajaran, memerlukan sedikit bimbingan penguatan konsep pada tahap aplikasi kontekstual.';
     } else {
-      return `Perlu pendampingan dan remedial pada penguasaan dasar materi ${material}.`;
+      predicate = 'D';
+      desc = 'Perlu bimbingan dan intervensi khusus untuk meningkatkan pemahaman mendalam dan ketuntasan materi pokok.';
     }
+
+    return { finalScore, predicate, desc, avgTp: Math.round(avgTp) };
   };
 
-  const generateGradesTableHtml = () => {
-    const rows = filteredStudents
-      .map((st, idx) => {
-        const g = grades[st.id] || { diagnostik: 75, formatif: 75, praktik: 75, proyek: 75, tugas: 75, refleksi: 75, sumatif: 75 };
-        const final = calculateFinalScore(g);
-        const desc = getAchievementDesc(final, st.name);
-        return `
+  const generateHtmlSummary = () => {
+    let rows = '';
+    students.forEach((st, idx) => {
+      const s = scores[st.id] || { tp1: 80, tp2: 80, tp3: 80, sts: 80, sas: 80 };
+      const calc = calculateFinal(st.id);
+      rows += `
         <tr>
-          <td style="text-align: center;">${idx + 1}</td>
-          <td>${st.nisn}</td>
-          <td>${st.name}</td>
-          <td style="text-align: center;">${g.formatif}</td>
-          <td style="text-align: center;">${g.praktik}</td>
-          <td style="text-align: center;">${g.proyek}</td>
-          <td style="text-align: center;">${g.tugas}</td>
-          <td style="text-align: center;">${g.refleksi}</td>
-          <td style="text-align: center;">${g.sumatif}</td>
-          <td style="text-align: center; font-weight: bold; color: ${final >= 75 ? '#1e3a8a' : '#b91c1c'};">${final}</td>
-          <td>${desc}</td>
+          <td style="border:1px solid #cbd5e1; padding:6px; text-align:center;">${idx + 1}</td>
+          <td style="border:1px solid #cbd5e1; padding:6px;"><strong>${st.name}</strong><br/><small style="color:#64748b;">${st.nisn}</small></td>
+          <td style="border:1px solid #cbd5e1; padding:6px; text-align:center;">${st.gender}</td>
+          <td style="border:1px solid #cbd5e1; padding:6px; text-align:center;">${s.tp1}</td>
+          <td style="border:1px solid #cbd5e1; padding:6px; text-align:center;">${s.tp2}</td>
+          <td style="border:1px solid #cbd5e1; padding:6px; text-align:center;">${s.tp3}</td>
+          <td style="border:1px solid #cbd5e1; padding:6px; text-align:center; font-weight:bold; background:#f8fafc;">${calc.avgTp}</td>
+          <td style="border:1px solid #cbd5e1; padding:6px; text-align:center;">${s.sts}</td>
+          <td style="border:1px solid #cbd5e1; padding:6px; text-align:center;">${s.sas}</td>
+          <td style="border:1px solid #cbd5e1; padding:6px; text-align:center; font-weight:bold; font-size:11pt; background:#f0fdf4; color:#15803d;">${calc.finalScore}</td>
+          <td style="border:1px solid #cbd5e1; padding:6px; text-align:center; font-weight:bold;">${calc.predicate}</td>
+          <td style="border:1px solid #cbd5e1; padding:6px; font-size:8.5pt;">${calc.desc}</td>
         </tr>
       `;
-      })
-      .join('');
+    });
 
     return `
-      <div style="font-family: 'Times New Roman', serif;">
-        <div style="text-align: center;">
-          <h2 style="margin: 0; font-size: 14pt; text-transform: uppercase;">DAFTAR NILAI ASESMEN PEMBELAJARAN MENDALAM</h2>
-          <h3 style="margin: 4px 0 16px 0; font-size: 12pt;">${schoolName}</h3>
+      <div style="font-family:'Times New Roman', Times, serif; color:#0f172a; line-height:1.4;">
+        <div style="text-align:center; margin-bottom:16px;">
+          <h2 style="margin:0; font-size:15pt; font-weight:bold; text-transform:uppercase;">DAFTAR REKAPITULASI NILAI DEEP LEARNING (RAPOR MERDEKA)</h2>
+          <h3 style="margin:4px 0 0; font-size:12pt; font-weight:bold;">${(user.schoolProfile.schoolName || user.schoolProfile.name || 'SD NEGERI').toUpperCase()}</h3>
+          <p style="margin:4px 0 0; font-size:10pt;">Mata Pelajaran: ${subject} | Kelas: ${grade} | Semester: ${semester} | Tahun Pelajaran: ${academicYear}</p>
         </div>
-        <table style="width: 100%; margin-bottom: 12px; font-size: 10.5pt;">
-          <tr><td>Mata Pelajaran: <strong>${subject}</strong></td><td>Kelas: <strong>${grade}</strong></td><td>Semester: <strong>${semester}</strong></td><td>Tahun: <strong>${schoolYear}</strong></td></tr>
-        </table>
-        <table style="width: 100%; border-collapse: collapse; font-size: 9.5pt;" border="1">
+
+        <table style="width:100%; border-collapse:collapse; font-size:9pt; margin-bottom:20px;">
           <thead>
-            <tr style="background-color: #f1f5f9; text-align: center;">
-              <th>No</th><th>NISN</th><th>Nama Siswa</th>
-              <th>Formatif</th><th>Praktik</th><th>Proyek</th><th>Tugas</th><th>Refleksi</th><th>Sumatif</th>
-              <th>Nilai Akhir</th><th>Deskripsi Ketercapaian TP</th>
+            <tr style="background:#f1f5f9; text-align:center;">
+              <th rowspan="2" style="border:1px solid #cbd5e1; padding:6px; width:30px;">No</th>
+              <th rowspan="2" style="border:1px solid #cbd5e1; padding:6px; text-align:left;">Nama Siswa</th>
+              <th rowspan="2" style="border:1px solid #cbd5e1; padding:6px; width:30px;">L/P</th>
+              <th colspan="4" style="border:1px solid #cbd5e1; padding:4px;">Asesmen Formatif (TP)</th>
+              <th colspan="2" style="border:1px solid #cbd5e1; padding:4px;">Asesmen Sumatif</th>
+              <th rowspan="2" style="border:1px solid #cbd5e1; padding:6px; width:45px; background:#e2e8f0;">NA</th>
+              <th rowspan="2" style="border:1px solid #cbd5e1; padding:6px; width:35px;">Predikat</th>
+              <th rowspan="2" style="border:1px solid #cbd5e1; padding:6px; min-width:180px;">Deskripsi Capaian Kompetensi (Deep Learning)</th>
+            </tr>
+            <tr style="background:#f8fafc; text-align:center;">
+              <th style="border:1px solid #cbd5e1; padding:4px; width:40px;">TP 1</th>
+              <th style="border:1px solid #cbd5e1; padding:4px; width:40px;">TP 2</th>
+              <th style="border:1px solid #cbd5e1; padding:4px; width:40px;">TP 3</th>
+              <th style="border:1px solid #cbd5e1; padding:4px; width:40px; background:#f1f5f9;">Rata</th>
+              <th style="border:1px solid #cbd5e1; padding:4px; width:40px;">STS</th>
+              <th style="border:1px solid #cbd5e1; padding:4px; width:40px;">SAS</th>
             </tr>
           </thead>
           <tbody>
             ${rows}
           </tbody>
         </table>
-        <div style="margin-top: 30px; text-align: right;">
-          <p>Guru Pengampu,</p>
-          <div style="height: 60px;"></div>
-          <p><strong>${teacherName}</strong></p>
+
+        <div style="margin-top:24px; display:flex; justify-content:space-between; font-size:10pt;">
+          <div style="float:left; width:45%; text-align:center;">
+            <p style="margin:0;">Mengetahui,</p>
+            <p style="margin:0 0 50px;">Kepala ${user.schoolProfile.schoolName}</p>
+            <p style="margin:0; font-weight:bold; text-decoration:underline;">${user.schoolProfile.headmaster?.name || 'Drs. H. Slamet Raharjo, M.Pd.'}</p>
+            <p style="margin:0;">NIP. ${user.schoolProfile.headmaster?.nip || '19680512 199303 1 004'}</p>
+          </div>
+          <div style="float:right; width:45%; text-align:center;">
+            <p style="margin:0;">${user.schoolProfile.regency}, ${new Date().toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })}</p>
+            <p style="margin:0 0 50px;">Guru Mata Pelajaran</p>
+            <p style="margin:0; font-weight:bold; text-decoration:underline;">${user.teacherProfile.fullName}</p>
+            <p style="margin:0;">NIP. ${user.teacherProfile.nip}</p>
+          </div>
+          <div style="clear:both;"></div>
         </div>
       </div>
     `;
   };
 
+  const handleDownloadDoc = () => {
+    const html = generateHtmlSummary();
+    downloadWordDocument(
+      `Daftar_Nilai_${grade}_${subject}_Sem${semester[0]}`,
+      `DAFTAR NILAI KELAS ${grade} SEMESTER ${semester}`,
+      html,
+      user.schoolProfile,
+      user.teacherProfile
+    );
+  };
+
+  const handlePrint = () => {
+    const html = generateHtmlSummary();
+    printOrExportPdf(`Daftar Nilai Kelas ${grade} - ${subject}`, html);
+  };
+
+  const handleSaveToDocs = () => {
+    if (onSaveAsDocument) {
+      const html = generateHtmlSummary();
+      onSaveAsDocument(
+        `Daftar Nilai Siswa Kelas ${grade} - Semester ${semester} (${subject})`,
+        html
+      );
+      setSavedAlert(true);
+      setTimeout(() => setSavedAlert(false), 2500);
+    }
+  };
+
   return (
-    <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden mb-6">
-      <div className="px-6 py-4 bg-slate-50 border-b border-slate-200 flex flex-col sm:flex-row items-center justify-between gap-4">
+    <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6 space-y-6">
+      {/* Title & Actions */}
+      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 pb-4 border-b border-slate-100">
         <div>
-          <h3 className="font-bold text-slate-900 text-base flex items-center gap-2">
-            <Award className="w-5 h-5 text-blue-900" />
-            <span>Kalkulator & Rekap Nilai Pembelajaran Mendalam (Kelas {grade})</span>
-          </h3>
+          <h2 className="text-lg font-bold text-slate-900 flex items-center gap-2">
+            <Award className="w-5 h-5 text-amber-600" />
+            <span>Daftar Nilai & Rapor Peserta Didik (Interaktif)</span>
+          </h2>
           <p className="text-xs text-slate-500 mt-0.5">
-            Otomatis menghitung bobot nilai, nilai akhir, serta menghasilkan deskripsi capaian kompetensi.
+            Pengelolaan nilai formatif TP1–TP3, sumatif STS/SAS dengan perhitungan Nilai Akhir (NA) dan deskripsi capaian otomatis.
           </p>
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
           <button
-            type="button"
-            onClick={() => setShowWeightsConfig(!showWeightsConfig)}
-            className="px-3 py-1.5 bg-slate-200 hover:bg-slate-300 text-slate-800 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5"
+            onClick={handleSaveToDocs}
+            className="px-3 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-semibold flex items-center gap-1.5 transition cursor-pointer"
           >
-            <Sliders className="w-3.5 h-3.5" />
-            <span>Atur Bobot (%)</span>
+            <Save className="w-3.5 h-3.5" />
+            <span>Simpan ke Dokumen</span>
           </button>
           <button
-            type="button"
-            onClick={() => downloadWordDocument(generateGradesTableHtml(), `Daftar_Nilai_Kelas_${grade}_${subject}`)}
-            className="px-3 py-1.5 bg-blue-900 hover:bg-blue-800 text-white rounded-xl text-xs font-bold transition-all shadow-sm flex items-center gap-1.5"
+            onClick={handleDownloadDoc}
+            className="px-3 py-2 bg-blue-700 hover:bg-blue-800 text-white rounded-xl text-xs font-semibold flex items-center gap-1.5 transition cursor-pointer"
           >
             <FileDown className="w-3.5 h-3.5" />
-            <span>Unduh Word</span>
+            <span>Download Word</span>
           </button>
           <button
-            type="button"
-            onClick={() => printOrExportPdf(generateGradesTableHtml(), `Daftar_Nilai_Kelas_${grade}_${subject}`)}
-            className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold transition-all shadow-sm flex items-center gap-1.5"
+            onClick={handlePrint}
+            className="px-3 py-2 bg-slate-800 hover:bg-slate-900 text-white rounded-xl text-xs font-semibold flex items-center gap-1.5 transition cursor-pointer"
           >
             <Printer className="w-3.5 h-3.5" />
             <span>Cetak / PDF</span>
@@ -190,136 +222,211 @@ export const InteractiveGrades: React.FC<GradesProps> = ({
         </div>
       </div>
 
-      {/* Weights Config Bar */}
-      {showWeightsConfig && (
-        <div className="p-4 bg-blue-50/70 border-b border-blue-200 text-xs">
-          <span className="font-bold text-blue-950 block mb-2">
-            Pengaturan Bobot Penilaian (Harus berjumlah 100%):
-          </span>
-          <div className="grid grid-cols-2 sm:grid-cols-6 gap-3">
-            <div>
-              <label className="block text-[10px] text-slate-600 font-bold mb-1">Formatif (%)</label>
-              <input
-                type="number"
-                value={weights.formatif}
-                onChange={(e) => setWeights({ ...weights, formatif: Number(e.target.value) })}
-                className="w-full px-2 py-1 text-xs border rounded bg-white"
-              />
-            </div>
-            <div>
-              <label className="block text-[10px] text-slate-600 font-bold mb-1">Praktik (%)</label>
-              <input
-                type="number"
-                value={weights.praktik}
-                onChange={(e) => setWeights({ ...weights, praktik: Number(e.target.value) })}
-                className="w-full px-2 py-1 text-xs border rounded bg-white"
-              />
-            </div>
-            <div>
-              <label className="block text-[10px] text-slate-600 font-bold mb-1">Proyek (%)</label>
-              <input
-                type="number"
-                value={weights.proyek}
-                onChange={(e) => setWeights({ ...weights, proyek: Number(e.target.value) })}
-                className="w-full px-2 py-1 text-xs border rounded bg-white"
-              />
-            </div>
-            <div>
-              <label className="block text-[10px] text-slate-600 font-bold mb-1">Tugas (%)</label>
-              <input
-                type="number"
-                value={weights.tugas}
-                onChange={(e) => setWeights({ ...weights, tugas: Number(e.target.value) })}
-                className="w-full px-2 py-1 text-xs border rounded bg-white"
-              />
-            </div>
-            <div>
-              <label className="block text-[10px] text-slate-600 font-bold mb-1">Refleksi (%)</label>
-              <input
-                type="number"
-                value={weights.refleksi}
-                onChange={(e) => setWeights({ ...weights, refleksi: Number(e.target.value) })}
-                className="w-full px-2 py-1 text-xs border rounded bg-white"
-              />
-            </div>
-            <div>
-              <label className="block text-[10px] text-slate-600 font-bold mb-1">Sumatif (%)</label>
-              <input
-                type="number"
-                value={weights.sumatif}
-                onChange={(e) => setWeights({ ...weights, sumatif: Number(e.target.value) })}
-                className="w-full px-2 py-1 text-xs border rounded bg-white"
-              />
-            </div>
-          </div>
+      {savedAlert && (
+        <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-xl text-xs text-emerald-800 flex items-center gap-2">
+          <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+          <span>Daftar Nilai berhasil disimpan ke Arsip Dokumen Anda!</span>
         </div>
       )}
 
-      {/* Grades Table */}
-      <div className="overflow-x-auto">
-        <table className="w-full text-xs text-left border-collapse">
-          <thead className="bg-slate-100 text-slate-700 uppercase font-bold text-[10px] tracking-wider text-center">
-            <tr>
-              <th className="px-3 py-2 w-10">No</th>
-              <th className="px-3 py-2 text-left w-44">Nama Siswa</th>
-              <th className="px-2 py-2 w-16">Formatif</th>
-              <th className="px-2 py-2 w-16">Praktik</th>
-              <th className="px-2 py-2 w-16">Proyek</th>
-              <th className="px-2 py-2 w-16">Tugas</th>
-              <th className="px-2 py-2 w-16">Refleksi</th>
-              <th className="px-2 py-2 w-16">Sumatif</th>
-              <th className="px-2 py-2 w-20 bg-blue-50 text-blue-900 font-black">Nilai Akhir</th>
-              <th className="px-3 py-2 text-left">Deskripsi Ketercapaian TP</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-slate-100">
-            {filteredStudents.map((st, idx) => {
-              const g = grades[st.id] || { diagnostik: 75, formatif: 75, praktik: 75, proyek: 75, tugas: 75, refleksi: 75, sumatif: 75 };
-              const final = calculateFinalScore(g);
-              const desc = getAchievementDesc(final, st.name);
-              const needsHelp = final < 75;
+      {/* Filter Bar */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 bg-slate-50 p-4 rounded-xl border border-slate-200 text-xs">
+        <div>
+          <label className="block font-semibold text-slate-700 mb-1">Semester</label>
+          <select
+            value={semester}
+            onChange={(e) => setSemester(e.target.value as any)}
+            className="w-full px-2.5 py-1.5 bg-white border border-slate-300 rounded-lg font-medium"
+          >
+            <option value="1 (Ganjil)">Semester 1 (Ganjil)</option>
+            <option value="2 (Genap)">Semester 2 (Genap)</option>
+          </select>
+        </div>
 
-              return (
-                <tr key={st.id} className="hover:bg-slate-50 transition-colors">
-                  <td className="px-2 py-2 text-center text-slate-500 font-bold">{idx + 1}</td>
-                  <td className="px-3 py-2 font-semibold text-slate-800">
-                    <div className="flex items-center gap-1.5">
-                      <span>{st.name}</span>
-                      {needsHelp && (
-                        <span title="Membutuhkan bimbingan remedial (< 75)">
-                          <AlertTriangle className="w-3.5 h-3.5 text-amber-500 shrink-0" />
-                        </span>
-                      )}
-                    </div>
-                  </td>
+        <div>
+          <label className="block font-semibold text-slate-700 mb-1">Mata Pelajaran</label>
+          <select
+            value={subject}
+            onChange={(e) => setSubject(e.target.value)}
+            className="w-full px-2.5 py-1.5 bg-white border border-slate-300 rounded-lg font-medium"
+          >
+            <option value="PJOK">PJOK</option>
+            <option value="PAI dan Budi Pekerti">PAI dan Budi Pekerti</option>
+            <option value="MATEMATIKA">MATEMATIKA</option>
+            <option value="BAHASA JAWA">BAHASA JAWA</option>
+            <option value="BAHASA INDONESIA">BAHASA INDONESIA</option>
+            <option value="IPAS">IPAS</option>
+            <option value="SENI MUSIK">SENI MUSIK</option>
+            <option value="SENI TARI">SENI TARI</option>
+            <option value="BAHASA INGGRIS">BAHASA INGGRIS</option>
+            <option value="PENDIDIKAN PANCASILA">PENDIDIKAN PANCASILA</option>
+          </select>
+        </div>
 
-                  {/* Editable grade inputs */}
-                  {(['formatif', 'praktik', 'proyek', 'tugas', 'refleksi', 'sumatif'] as const).map((field) => (
-                    <td key={field} className="p-1 text-center">
+        <div>
+          <label className="block font-semibold text-slate-700 mb-1">Kelas SD</label>
+          <select
+            value={grade}
+            onChange={(e) => setGrade(e.target.value)}
+            className="w-full px-2.5 py-1.5 bg-white border border-slate-300 rounded-lg font-medium"
+          >
+            <option value="1">Kelas 1</option>
+            <option value="2">Kelas 2</option>
+            <option value="3">Kelas 3</option>
+            <option value="4">Kelas 4</option>
+            <option value="5">Kelas 5</option>
+            <option value="6">Kelas 6</option>
+          </select>
+        </div>
+
+        <div>
+          <label className="block font-semibold text-slate-700 mb-1">Tahun Pelajaran</label>
+          <input
+            type="text"
+            value={academicYear}
+            onChange={(e) => setAcademicYear(e.target.value)}
+            className="w-full px-2.5 py-1.5 bg-white border border-slate-300 rounded-lg font-medium"
+          />
+        </div>
+      </div>
+
+      {/* Table */}
+      {students.length === 0 ? (
+        <div className="p-8 text-center bg-slate-50 border border-dashed border-slate-300 rounded-2xl">
+          <p className="text-xs text-slate-500">
+            Belum ada data siswa. Silakan buka menu <strong>Data Siswa</strong> di sidebar untuk menambah siswa terlebih dahulu.
+          </p>
+        </div>
+      ) : (
+        <div className="overflow-x-auto border border-slate-200 rounded-xl shadow-xs">
+          <table className="w-full text-xs text-left border-collapse">
+            <thead className="bg-slate-100 text-slate-700 font-semibold border-b border-slate-200 text-center">
+              <tr>
+                <th rowSpan={2} className="py-2 px-2 w-10">No</th>
+                <th rowSpan={2} className="py-2 px-3 text-left min-w-[160px]">Nama Peserta Didik</th>
+                <th rowSpan={2} className="py-2 px-2 w-8">L/P</th>
+                <th colSpan={4} className="py-1.5 px-2 bg-blue-50/70 border-b border-slate-200">Formatif (TP)</th>
+                <th colSpan={2} className="py-1.5 px-2 bg-indigo-50/70 border-b border-slate-200">Sumatif</th>
+                <th rowSpan={2} className="py-2 px-2 w-14 bg-emerald-100 text-emerald-900 font-bold">NA</th>
+                <th rowSpan={2} className="py-2 px-2 w-10">Pred</th>
+                <th rowSpan={2} className="py-2 px-3 text-left min-w-[220px]">Deskripsi Capaian (Deep Learning)</th>
+              </tr>
+              <tr className="bg-slate-50 text-[11px]">
+                <th className="py-1.5 px-1 w-14">TP 1</th>
+                <th className="py-1.5 px-1 w-14">TP 2</th>
+                <th className="py-1.5 px-1 w-14">TP 3</th>
+                <th className="py-1.5 px-1 w-14 bg-slate-200 font-bold">Rata</th>
+                <th className="py-1.5 px-1 w-14">STS</th>
+                <th className="py-1.5 px-1 w-14">SAS</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-100">
+              {students.map((st, idx) => {
+                const s = scores[st.id] || { tp1: 80, tp2: 80, tp3: 80, sts: 80, sas: 80 };
+                const calc = calculateFinal(st.id);
+
+                return (
+                  <tr key={st.id} className="hover:bg-slate-50/70 transition">
+                    <td className="py-2 px-2 text-center text-slate-500 font-mono text-[11px]">{idx + 1}</td>
+                    <td className="py-2 px-3">
+                      <div className="font-semibold text-slate-900">{st.name}</div>
+                      <div className="text-[10px] text-slate-500 font-mono">{st.nisn}</div>
+                    </td>
+                    <td className="py-2 px-2 text-center font-bold text-slate-600">{st.gender}</td>
+                    
+                    {/* TP 1 */}
+                    <td className="py-1 px-1">
                       <input
                         type="number"
-                        min={0}
-                        max={100}
-                        value={g[field]}
-                        onChange={(e) => updateScore(st.id, field, Number(e.target.value))}
-                        className="w-14 text-center py-1 text-xs font-semibold border border-slate-200 rounded focus:border-blue-500 focus:outline-none"
+                        min="0"
+                        max="100"
+                        value={s.tp1}
+                        onChange={(e) => handleScoreChange(st.id, 'tp1', parseInt(e.target.value))}
+                        className="w-12 text-center py-1 bg-white border border-slate-300 rounded font-semibold text-xs focus:ring-1 focus:ring-blue-500"
                       />
                     </td>
-                  ))}
+                    {/* TP 2 */}
+                    <td className="py-1 px-1">
+                      <input
+                        type="number"
+                        min="0"
+                        max="100"
+                        value={s.tp2}
+                        onChange={(e) => handleScoreChange(st.id, 'tp2', parseInt(e.target.value))}
+                        className="w-12 text-center py-1 bg-white border border-slate-300 rounded font-semibold text-xs focus:ring-1 focus:ring-blue-500"
+                      />
+                    </td>
+                    {/* TP 3 */}
+                    <td className="py-1 px-1">
+                      <input
+                        type="number"
+                        min="0"
+                        max="100"
+                        value={s.tp3}
+                        onChange={(e) => handleScoreChange(st.id, 'tp3', parseInt(e.target.value))}
+                        className="w-12 text-center py-1 bg-white border border-slate-300 rounded font-semibold text-xs focus:ring-1 focus:ring-blue-500"
+                      />
+                    </td>
+                    {/* Rata TP */}
+                    <td className="py-2 px-1 text-center font-bold text-slate-700 bg-slate-100 font-mono">
+                      {calc.avgTp}
+                    </td>
 
-                  <td className="px-2 py-1 text-center font-black text-sm bg-blue-50/60">
-                    <span className={final >= 75 ? 'text-blue-900' : 'text-red-600'}>
-                      {final}
-                    </span>
-                  </td>
-                  <td className="px-3 py-1 text-slate-600 text-[11px] leading-tight">
-                    {desc}
-                  </td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
+                    {/* STS */}
+                    <td className="py-1 px-1">
+                      <input
+                        type="number"
+                        min="0"
+                        max="100"
+                        value={s.sts}
+                        onChange={(e) => handleScoreChange(st.id, 'sts', parseInt(e.target.value))}
+                        className="w-12 text-center py-1 bg-white border border-slate-300 rounded font-semibold text-xs focus:ring-1 focus:ring-blue-500"
+                      />
+                    </td>
+                    {/* SAS */}
+                    <td className="py-1 px-1">
+                      <input
+                        type="number"
+                        min="0"
+                        max="100"
+                        value={s.sas}
+                        onChange={(e) => handleScoreChange(st.id, 'sas', parseInt(e.target.value))}
+                        className="w-12 text-center py-1 bg-white border border-slate-300 rounded font-semibold text-xs focus:ring-1 focus:ring-blue-500"
+                      />
+                    </td>
+
+                    {/* NA */}
+                    <td className="py-2 px-2 text-center font-bold text-emerald-800 bg-emerald-50 text-sm font-mono">
+                      {calc.finalScore}
+                    </td>
+                    {/* Predikat */}
+                    <td className="py-2 px-2 text-center font-bold text-slate-800">
+                      <span className={`px-2 py-0.5 rounded text-[11px] ${
+                        calc.predicate === 'A' ? 'bg-emerald-100 text-emerald-800' :
+                        calc.predicate === 'B' ? 'bg-blue-100 text-blue-800' :
+                        'bg-amber-100 text-amber-800'
+                      }`}>
+                        {calc.predicate}
+                      </span>
+                    </td>
+                    {/* Deskripsi */}
+                    <td className="py-2 px-3 text-[11px] text-slate-600 leading-snug">
+                      {calc.desc}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      {/* Info note */}
+      <div className="p-3.5 bg-blue-50/70 border border-blue-200/80 rounded-xl text-xs text-blue-950 flex items-start gap-2.5">
+        <Info className="w-4 h-4 text-blue-700 shrink-0 mt-0.5" />
+        <div className="leading-relaxed">
+          <strong>Bobot Penghitungan Nilai Akhir (NA):</strong> Rata-rata Formatif (50%) + Sumatif Tengah Semester (25%) + Sumatif Akhir Semester (25%). Deskripsi capaian kompetensi merefleksikan 3 prinsip Deep Learning (Berkesadaran, Bermakna, Menggembirakan).
+        </div>
       </div>
     </div>
   );

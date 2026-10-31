@@ -1,12 +1,17 @@
 import React from 'react';
 import { MessageCircle } from 'lucide-react';
 
-export const WhatsAppButton: React.FC = () => {
-  const waUrl = 'https://wa.me/6285725080078?text=Halo%20Mas%20Husein%20Apriyanto,%20saya%20butuh%20bantuan%20seputar%20aplikasi%20EDU%20PLAN%20AI%20-%20DEEP%20LEARNING';
+interface WhatsAppButtonProps {
+  phoneNumber?: string;
+}
+
+export const WhatsAppButton: React.FC<WhatsAppButtonProps> = ({
+  phoneNumber = '6285725080078',
+}) => {
+  const waUrl = `https://wa.me/${phoneNumber}?text=Halo%20Mas%20Husein%20Apriyanto,%20saya%20butuh%20bantuan%20seputar%20aplikasi%20EDU%20PLAN%20AI%20-%20DEEP%20LEARNING`;
 
   return (
     <aside aria-label="Bantuan Langsung WhatsApp" className="fixed bottom-6 right-6 z-50 flex items-center group">
-      {/* Tooltip on hover */}
       <div className="hidden sm:flex flex-col items-end mr-3 bg-slate-900/90 text-white px-3 py-1.5 rounded-xl shadow-xl backdrop-blur-sm opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none">
         <span className="text-xs font-semibold text-amber-300">Butuh Bantuan Guru?</span>
         <span className="text-[11px] text-slate-300">Chat WhatsApp: 085725080078</span>

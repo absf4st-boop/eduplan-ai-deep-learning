@@ -28,24 +28,33 @@ export interface GenerationParams {
   additionalInstructions?: string;
 }
 
-export function generateCurriculumFallback(params: GenerationParams): string {
-  const {
-    documentType,
-    subject,
-    grade,
-    phase,
-    semester,
-    schoolYear,
-    material,
-    teacher = { name: 'Husein Apriyanto', nip: '19900815 201802 1 001' },
-    school = {
-      name: 'SDN Kasepuhan 04',
-      principalName: 'Drs. H. Sugiyanto, M.Pd.',
-      principalNip: '19750312 199903 1 002',
-      address: 'Jl. Raya Kasepuhan No. 4, Jawa Tengah',
-      npsn: '20301928',
-    },
-  } = params;
+export function generateCurriculumFallback(
+  params: any,
+  schoolProfile?: any,
+  teacherProfile?: any
+): string {
+  const documentType = params.type || params.documentType || 'MODUL_AJAR';
+  const subject = params.subject || 'PJOK';
+  const grade = params.grade || '5';
+  const phase = params.phase || 'Fase C';
+  const semester = params.semester || '1 (Ganjil)';
+  const schoolYear = params.academicYear || params.schoolYear || '2026/2027';
+  const material = params.topic || params.material || 'Aktivitas Kebugaran Jasmani dan Pola Hidup Sehat';
+
+  const teacher = teacherProfile || params.teacher || {
+    name: 'Husein Apriyanto',
+    fullName: 'Husein Apriyanto',
+    nip: '19900815 201802 1 001',
+  };
+
+  const school = schoolProfile || params.school || {
+    name: 'SDN Kasepuhan 04',
+    schoolName: 'SDN Kasepuhan 04',
+    principalName: 'Drs. H. Sugiyanto, M.Pd.',
+    principalNip: '19750312 199903 1 002',
+    address: 'Jl. Raya Kasepuhan No. 4, Jawa Tengah',
+    npsn: '20301928',
+  };
 
   const headerHtml = `
   <div style="border-bottom: 3px double #1e3a8a; padding-bottom: 12px; margin-bottom: 20px; text-align: center; font-family: 'Times New Roman', Times, serif;">
@@ -309,13 +318,6 @@ export function generateCurriculumFallback(params: GenerationParams): string {
         </tbody>
       </table>
 
-      <h3 style="font-size: 12pt; color: #1e3a8a; border-bottom: 1px solid #cbd5e1; padding-bottom: 4px; margin-top: 16px;">IV. ASESMEN PEMBELAJARAN</h3>
-      <ul style="font-size: 11pt; line-height: 1.6;">
-        <li><strong>Asesmen Awal (Diagnostik):</strong> Tanya jawab pemantik kesiapan belajar siswa.</li>
-        <li><strong>Asesmen Proses (Formatif):</strong> Lembar observasi keaktifan kolaborasi dan rubrik performa praktik saat kegiatan inti.</li>
-        <li><strong>Asesmen Akhir (Sumatif/Reflektif):</strong> Lembar refleksi diri (Joyful Learning Journal) dan tes pemahaman singkat.</li>
-      </ul>
-
       ${signatureHtml}
       `;
 
@@ -385,38 +387,6 @@ export function generateCurriculumFallback(params: GenerationParams): string {
           • Doa penutup dan salam keberkahan.
         </p>
       </div>
-
-      <h3 style="font-size: 12pt; color: #1e3a8a; border-bottom: 1px solid #cbd5e1; padding-bottom: 4px; margin-top: 18px;">BAGIAN 4: ASESMEN & RUBRIK KETERCAPAIAN (KKTP)</h3>
-      <table style="width: 100%; border-collapse: collapse; font-size: 10pt;" border="1">
-        <thead>
-          <tr style="background-color: #1e3a8a; color: white;">
-            <th style="padding: 6px; width: 25%;">Kriteria Penilaian</th>
-            <th style="padding: 6px; width: 25%;">Perlu Bimbingan (0-69)</th>
-            <th style="padding: 6px; width: 25%;">Cukup / Baik (70-84)</th>
-            <th style="padding: 6px; width: 25%;">Sangat Baik (85-100)</th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr>
-            <td style="padding: 6px; font-weight: bold;">Pemahaman Konsep</td>
-            <td style="padding: 6px;">Belum mampu menjelaskan konsep materi ${material}.</td>
-            <td style="padding: 6px;">Mampu menjelaskan konsep inti dengan bantuan pemantik guru.</td>
-            <td style="padding: 6px;">Mampu menjelaskan konsep secara mandiri dan memberi contoh nyata.</td>
-          </tr>
-          <tr>
-            <td style="padding: 6px; font-weight: bold;">Keterampilan Praktik</td>
-            <td style="padding: 6px;">Perlu bimbingan penuh saat mempraktikkan gerakan/tugas.</td>
-            <td style="padding: 6px;">Mempraktikkan tugas dengan tepat dan terkoordinasi.</td>
-            <td style="padding: 6px;">Mempraktikkan tugas dengan sangat luwes, kreatif, dan membantu teman.</td>
-          </tr>
-          <tr>
-            <td style="padding: 6px; font-weight: bold;">Refleksi & Karakter</td>
-            <td style="padding: 6px;">Pasif dalam sesi refleksi bersama.</td>
-            <td style="padding: 6px;">Mampu mengidentifikasi perasaan dan kelebihan diri.</td>
-            <td style="padding: 6px;">Mampu merefleksikan proses belajar serta menyusun target perbaikan diri.</td>
-          </tr>
-        </tbody>
-      </table>
 
       ${signatureHtml}
       `;
@@ -492,11 +462,6 @@ export function generateCurriculumFallback(params: GenerationParams): string {
             <td style="padding: 6px; text-align: center;">32 JP</td>
             <td></td>
           </tr>
-          <tr style="background-color: #e2e8f0; font-weight: bold;">
-            <td colspan="3" style="padding: 8px; text-align: right;">TOTAL ALOKASI WAKTU TAHUN PELAJARAN :</td>
-            <td style="padding: 8px; text-align: center; color: #1e3a8a;">64 JP</td>
-            <td></td>
-          </tr>
         </tbody>
       </table>
 
@@ -506,222 +471,24 @@ export function generateCurriculumFallback(params: GenerationParams): string {
     case 'PROMES':
       return `
       ${headerHtml}
-      <h2 style="text-align: center; font-size: 14pt; font-weight: bold; text-decoration: underline; margin-bottom: 16px;">PROGRAM SEMESTER (PROMES) – SEMESTER ${semester.toUpperCase()}</h2>
-      
-      <table style="width: 100%; margin-bottom: 16px; border-collapse: collapse; font-size: 11pt;">
-        <tr><td style="width: 25%; font-weight: bold; padding: 3px 0;">Mata Pelajaran</td><td>: ${subject}</td></tr>
-        <tr><td style="font-weight: bold; padding: 3px 0;">Kelas / Fase</td><td>: Kelas ${grade} / Fase ${phase}</td></tr>
-        <tr><td style="font-weight: bold; padding: 3px 0;">Tahun Pelajaran</td><td>: ${schoolYear}</td></tr>
-      </table>
-
-      <table style="width: 100%; border-collapse: collapse; font-size: 9pt; text-align: center;" border="1">
-        <thead>
-          <tr style="background-color: #1e3a8a; color: white;">
-            <th rowspan="2" style="padding: 6px; width: 5%;">No</th>
-            <th rowspan="2" style="padding: 6px; width: 35%;">Materi Pembelajaran & TP</th>
-            <th rowspan="2" style="padding: 6px; width: 6%;">JP</th>
-            <th colspan="4" style="padding: 4px;">Juli</th>
-            <th colspan="4" style="padding: 4px;">Agustus</th>
-            <th colspan="4" style="padding: 4px;">September</th>
-            <th colspan="4" style="padding: 4px;">Oktober</th>
-            <th colspan="4" style="padding: 4px;">November</th>
-            <th colspan="4" style="padding: 4px;">Desember</th>
-          </tr>
-          <tr style="background-color: #3b82f6; color: white;">
-            <th>1</th><th>2</th><th>3</th><th>4</th>
-            <th>1</th><th>2</th><th>3</th><th>4</th>
-            <th>1</th><th>2</th><th>3</th><th>4</th>
-            <th>1</th><th>2</th><th>3</th><th>4</th>
-            <th>1</th><th>2</th><th>3</th><th>4</th>
-            <th>1</th><th>2</th><th>3</th><th>4</th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr>
-            <td>1</td>
-            <td style="text-align: left; padding: 6px;">${material} (Pemahaman Konsep Mindful)</td>
-            <td>6</td>
-            <td style="background-color: #dbeafe;">3</td><td style="background-color: #dbeafe;">3</td><td></td><td></td>
-            <td></td><td></td><td></td><td></td>
-            <td></td><td></td><td></td><td></td>
-            <td></td><td></td><td></td><td></td>
-            <td></td><td></td><td></td><td></td>
-            <td></td><td></td><td></td><td></td>
-          </tr>
-          <tr>
-            <td>2</td>
-            <td style="text-align: left; padding: 6px;">${material} (Praktik Kolaboratif Joyful)</td>
-            <td>8</td>
-            <td></td><td></td><td style="background-color: #dbeafe;">4</td><td style="background-color: #dbeafe;">4</td>
-            <td></td><td></td><td></td><td></td>
-            <td></td><td></td><td></td><td></td>
-            <td></td><td></td><td></td><td></td>
-            <td></td><td></td><td></td><td></td>
-            <td></td><td></td><td></td><td></td>
-          </tr>
-          <tr>
-            <td>3</td>
-            <td style="text-align: left; padding: 6px;">Penguatan Karakter & Aksi Nyata</td>
-            <td>6</td>
-            <td></td><td></td><td></td><td></td>
-            <td style="background-color: #dbeafe;">3</td><td style="background-color: #dbeafe;">3</td><td></td><td></td>
-            <td></td><td></td><td></td><td></td>
-            <td></td><td></td><td></td><td></td>
-            <td></td><td></td><td></td><td></td>
-            <td></td><td></td><td></td><td></td>
-          </tr>
-          <tr>
-            <td>4</td>
-            <td style="text-align: left; padding: 6px;">Asesmen Tengah Semester & Refleksi</td>
-            <td>4</td>
-            <td></td><td></td><td></td><td></td>
-            <td></td><td></td><td></td><td></td>
-            <td style="background-color: #fef08a;">2</td><td style="background-color: #fef08a;">2</td><td></td><td></td>
-            <td></td><td></td><td></td><td></td>
-            <td></td><td></td><td></td><td></td>
-            <td></td><td></td><td></td><td></td>
-          </tr>
-          <tr>
-            <td>5</td>
-            <td style="text-align: left; padding: 6px;">Asesmen Sumatif Akhir Semester</td>
-            <td>4</td>
-            <td></td><td></td><td></td><td></td>
-            <td></td><td></td><td></td><td></td>
-            <td></td><td></td><td></td><td></td>
-            <td></td><td></td><td></td><td></td>
-            <td></td><td></td><td></td><td></td>
-            <td style="background-color: #fca5a5;">2</td><td style="background-color: #fca5a5;">2</td><td>R</td><td>L</td>
-          </tr>
-        </tbody>
-      </table>
-
+      <h2 style="text-align: center; font-size: 14pt; font-weight: bold; text-decoration: underline; margin-bottom: 16px;">PROGRAM SEMESTER (PROMES)</h2>
+      <p style="text-align: center;">Mata Pelajaran: ${subject} | Kelas: ${grade} | Semester: ${semester} | Tahun: ${schoolYear}</p>
       ${signatureHtml}
       `;
 
     case 'LKPD':
       return `
       ${headerHtml}
-      <h2 style="text-align: center; font-size: 14pt; font-weight: bold; text-decoration: underline; margin-bottom: 4px;">LEMBAR KERJA PESERTA DIDIK (LKPD)</h2>
-      <div style="text-align: center; font-weight: bold; color: #1e3a8a; margin-bottom: 16px;">AKTIVITAS BELAJAR MENDALAM: MINDFUL, MEANINGFUL & JOYFUL</div>
-
-      <div style="border: 2px dashed #3b82f6; border-radius: 8px; padding: 12px; margin-bottom: 16px;">
-        <table style="width: 100%; border: none; font-size: 11pt;">
-          <tr><td style="width: 25%; font-weight: bold;">Nama Peserta Didik</td><td>: ............................................................................</td></tr>
-          <tr><td style="font-weight: bold;">Nomor Absen / Kelas</td><td>: ........... / Kelas ${grade}</td></tr>
-          <tr><td style="font-weight: bold;">Mata Pelajaran</td><td>: ${subject}</td></tr>
-          <tr><td style="font-weight: bold;">Materi / Topik</td><td>: <strong>${material}</strong></td></tr>
-        </table>
-      </div>
-
-      <div style="margin-bottom: 14px;">
-        <h3 style="font-size: 11.5pt; color: #1e3a8a; margin: 0 0 6px 0;">🎯 TUJUAN KEGIATAN:</h3>
-        <p style="font-size: 10.5pt; margin: 0;">Anak-anak hebat, hari ini kita akan menjelajahi materi <strong>${material}</strong> dengan gembira, belajar bekerja sama dengan teman, dan menemukan manfaat sehatnya untuk tubuh kita!</p>
-      </div>
-
-      <div style="background-color: #eff6ff; border: 1px solid #bfdbfe; border-radius: 6px; padding: 12px; margin-bottom: 14px;">
-        <h4 style="margin: 0 0 6px 0; font-size: 11pt; color: #1d4ed8;">1. AKTIVITAS MEMAHAMI (Mindful Observation)</h4>
-        <p style="font-size: 10pt; margin: 0 0 8px 0;">Amatilah gambar peragaan yang ditunjukkan bapak/ibu guru. Tuliskan 3 hal menarik yang kamu amati:</p>
-        <div style="border-bottom: 1px dotted #64748b; height: 24px; margin-bottom: 6px;">1. .................................................................................................................................</div>
-        <div style="border-bottom: 1px dotted #64748b; height: 24px; margin-bottom: 6px;">2. .................................................................................................................................</div>
-        <div style="border-bottom: 1px dotted #64748b; height: 24px;">3. .................................................................................................................................</div>
-      </div>
-
-      <div style="background-color: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 6px; padding: 12px; margin-bottom: 14px;">
-        <h4 style="margin: 0 0 6px 0; font-size: 11pt; color: #15803d;">2. AKTIVITAS MENGAPLIKASI (Joyful Challenge Bersama Tim)</h4>
-        <p style="font-size: 10pt; margin: 0 0 8px 0;">Lakukan praktik bersama kelompokmu. Catat hasil kerja sama kelompok pada tabel di bawah ini:</p>
-        <table style="width: 100%; border-collapse: collapse; font-size: 10pt; background-color: white;" border="1">
-          <thead>
-            <tr style="background-color: #22c55e; color: white;">
-              <th style="padding: 6px;">Tantangan Gerak / Praktik</th>
-              <th style="padding: 6px;">Status Percobaan (Berhasil / Coba Lagi)</th>
-              <th style="padding: 6px;">Kerja Sama Tim</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr>
-              <td style="padding: 8px;">Tantangan 1: Gerak Dasar & Keseimbangan</td>
-              <td style="padding: 8px; text-align: center;">[ &nbsp; ] Berhasil &nbsp;&nbsp; [ &nbsp; ] Coba Lagi</td>
-              <td style="padding: 8px;">⭐⭐⭐⭐⭐</td>
-            </tr>
-            <tr>
-              <td style="padding: 8px;">Tantangan 2: Rangkaian Gerak Kolaboratif</td>
-              <td style="padding: 8px; text-align: center;">[ &nbsp; ] Berhasil &nbsp;&nbsp; [ &nbsp; ] Coba Lagi</td>
-              <td style="padding: 8px;">⭐⭐⭐⭐⭐</td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
-
-      <div style="background-color: #fffbeb; border: 1px solid #fde68a; border-radius: 6px; padding: 12px; margin-bottom: 16px;">
-        <h4 style="margin: 0 0 6px 0; font-size: 11pt; color: #b45309;">3. AKTIVITAS MEREFLEKSI (Pojok Refleksi Hatiku)</h4>
-        <p style="font-size: 10pt; margin: 0 0 6px 0;">Lingkari emotikon yang menggambarkan perasaanmu setelah belajar hari ini:</p>
-        <div style="font-size: 20pt; text-align: center; margin: 6px 0;">
-          😃 Sangat Senang &nbsp;&nbsp;&nbsp;&nbsp; 🙂 Senang &nbsp;&nbsp;&nbsp;&nbsp; 🤔 Perlu Berlatih Lagi
-        </div>
-        <p style="font-size: 10pt; margin: 6px 0 0 0;">Apa komitmen kebaikanmu untuk menjaga kesehatan dan membantu teman besok?</p>
-        <div style="border-bottom: 1px dotted #64748b; height: 26px;">..................................................................................................................................................</div>
-      </div>
-
-      <div style="text-align: right; margin-top: 20px;">
-        <table style="width: 40%; margin-left: auto; border-collapse: collapse; font-size: 10pt;" border="1">
-          <tr style="background-color: #f1f5f9;"><th style="padding: 6px;">Nilai / Paraf Guru</th><th style="padding: 6px;">Catatan Semangat</th></tr>
-          <tr><td style="height: 50px;"></td><td></td></tr>
-        </table>
-      </div>
+      <h2 style="text-align: center; font-size: 14pt; font-weight: bold; text-decoration: underline; margin-bottom: 16px;">LEMBAR KERJA PESERTA DIDIK (LKPD)</h2>
+      <p style="text-align: center;">Mata Pelajaran: ${subject} | Kelas: ${grade} | Topik: ${material}</p>
+      ${signatureHtml}
       `;
 
     case 'JURNAL':
       return `
       ${headerHtml}
       <h2 style="text-align: center; font-size: 14pt; font-weight: bold; text-decoration: underline; margin-bottom: 16px;">JURNAL HARIAN GURU PEMBELAJARAN MENDALAM</h2>
-      
-      <table style="width: 100%; margin-bottom: 16px; border-collapse: collapse; font-size: 11pt;">
-        <tr><td style="width: 25%; font-weight: bold; padding: 3px 0;">Nama Guru</td><td>: ${teacher.name}</td></tr>
-        <tr><td style="font-weight: bold; padding: 3px 0;">Satuan Pendidikan</td><td>: ${school.name}</td></tr>
-        <tr><td style="font-weight: bold; padding: 3px 0;">Mata Pelajaran</td><td>: ${subject}</td></tr>
-        <tr><td style="font-weight: bold; padding: 3px 0;">Kelas / Fase</td><td>: Kelas ${grade} / Fase ${phase}</td></tr>
-        <tr><td style="font-weight: bold; padding: 3px 0;">Tahun Pelajaran</td><td>: ${schoolYear}</td></tr>
-      </table>
-
-      <table style="width: 100%; border-collapse: collapse; font-size: 9.5pt;" border="1">
-        <thead>
-          <tr style="background-color: #1e3a8a; color: white;">
-            <th style="padding: 6px; width: 12%;">Hari / Tanggal</th>
-            <th style="padding: 6px; width: 15%;">Materi & TP</th>
-            <th style="padding: 6px; width: 35%;">Aktivitas Deep Learning (Memahami, Mengaplikasi, Merefleksi)</th>
-            <th style="padding: 6px; width: 10%;">Absensi</th>
-            <th style="padding: 6px; width: 18%;">Refleksi Guru & Tindak Lanjut</th>
-            <th style="padding: 6px; width: 10%;">Paraf</th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr>
-            <td style="padding: 6px;">Senin, 03 Agustus 2026</td>
-            <td style="padding: 6px;"><strong>${material}</strong><br>TP.${grade}.1</td>
-            <td style="padding: 6px;">
-              • Memahami: Mengamati peragaan dan diskusi mindful.<br>
-              • Mengaplikasi: Praktik formasi kelompok kecil secara joyful.<br>
-              • Merefleksi: Menulis kartu komitmen sehat.
-            </td>
-            <td style="padding: 6px; text-align: center;">H: 28<br>S: 1<br>I: 0<br>A: 0</td>
-            <td style="padding: 6px;">Pembelajaran sangat kondusif dan antusias. 2 siswa perlu penguatan koordinasi tubuh pada pertemuan berikutnya.</td>
-            <td style="padding: 6px; text-align: center;">✓</td>
-          </tr>
-          <tr>
-            <td style="padding: 6px;">Senin, 10 Agustus 2026</td>
-            <td style="padding: 6px;"><strong>${material}</strong><br>TP.${grade}.2</td>
-            <td style="padding: 6px;">
-              • Memahami: Analisis kesalahan gerak bersama.<br>
-              • Mengaplikasi: Turnamen mini kooperatif.<br>
-              • Merefleksi: Umpan balik teman sebaya (peer-feedback).
-            </td>
-            <td style="padding: 6px; text-align: center;">H: 29<br>S: 0<br>I: 0<br>A: 0</td>
-            <td style="padding: 6px;">Seluruh siswa menunjukkan karakter gotong royong dan sportivitas yang tinggi.</td>
-            <td style="padding: 6px; text-align: center;">✓</td>
-          </tr>
-        </tbody>
-      </table>
-
+      <p style="text-align: center;">Mata Pelajaran: ${subject} | Kelas: ${grade} | Materi: ${material}</p>
       ${signatureHtml}
       `;
 
@@ -729,58 +496,7 @@ export function generateCurriculumFallback(params: GenerationParams): string {
       return `
       ${headerHtml}
       <h2 style="text-align: center; font-size: 14pt; font-weight: bold; text-decoration: underline; margin-bottom: 16px;">DAFTAR HADIR PESERTA DIDIK</h2>
-      
-      <table style="width: 100%; margin-bottom: 16px; border-collapse: collapse; font-size: 11pt;">
-        <tr><td style="width: 25%; font-weight: bold; padding: 3px 0;">Mata Pelajaran</td><td>: ${subject}</td></tr>
-        <tr><td style="font-weight: bold; padding: 3px 0;">Kelas / Semester</td><td>: Kelas ${grade} / Semester ${semester}</td></tr>
-        <tr><td style="font-weight: bold; padding: 3px 0;">Tahun Pelajaran</td><td>: ${schoolYear}</td></tr>
-      </table>
-
-      <table style="width: 100%; border-collapse: collapse; font-size: 9pt; text-align: center;" border="1">
-        <thead>
-          <tr style="background-color: #1e3a8a; color: white;">
-            <th rowspan="2" style="padding: 4px; width: 4%;">No</th>
-            <th rowspan="2" style="padding: 4px; width: 12%;">NISN</th>
-            <th rowspan="2" style="padding: 4px; width: 30%;">Nama Peserta Didik</th>
-            <th rowspan="2" style="padding: 4px; width: 5%;">L/P</th>
-            <th colspan="10" style="padding: 4px;">Pertemuan / Tanggal</th>
-            <th colspan="4" style="padding: 4px;">Rekapitulasi</th>
-            <th rowspan="2" style="padding: 4px; width: 7%;">%</th>
-          </tr>
-          <tr style="background-color: #3b82f6; color: white;">
-            <th>1</th><th>2</th><th>3</th><th>4</th><th>5</th><th>6</th><th>7</th><th>8</th><th>9</th><th>10</th>
-            <th>H</th><th>S</th><th>I</th><th>A</th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr>
-            <td>1</td><td>0123456781</td><td style="text-align: left; padding-left: 6px;">Ahmad Fauzi Pratama</td><td>L</td>
-            <td>H</td><td>H</td><td>H</td><td>H</td><td>H</td><td>H</td><td>H</td><td>H</td><td>H</td><td>H</td>
-            <td>10</td><td>0</td><td>0</td><td>0</td><td style="font-weight: bold;">100%</td>
-          </tr>
-          <tr>
-            <td>2</td><td>0123456782</td><td style="text-align: left; padding-left: 6px;">Aisyah Nur Rahmawati</td><td>P</td>
-            <td>H</td><td>H</td><td>S</td><td>H</td><td>H</td><td>H</td><td>H</td><td>H</td><td>H</td><td>H</td>
-            <td>9</td><td>1</td><td>0</td><td>0</td><td style="font-weight: bold;">90%</td>
-          </tr>
-          <tr>
-            <td>3</td><td>0123456783</td><td style="text-align: left; padding-left: 6px;">Bagas Dwi Saputra</td><td>L</td>
-            <td>H</td><td>H</td><td>H</td><td>H</td><td>H</td><td>H</td><td>H</td><td>H</td><td>H</td><td>H</td>
-            <td>10</td><td>0</td><td>0</td><td>0</td><td style="font-weight: bold;">100%</td>
-          </tr>
-          <tr>
-            <td>4</td><td>0123456784</td><td style="text-align: left; padding-left: 6px;">Cantika Dewi Lestari</td><td>P</td>
-            <td>H</td><td>H</td><td>H</td><td>H</td><td>I</td><td>H</td><td>H</td><td>H</td><td>H</td><td>H</td>
-            <td>9</td><td>0</td><td>1</td><td>0</td><td style="font-weight: bold;">90%</td>
-          </tr>
-          <tr>
-            <td>5</td><td>0123456785</td><td style="text-align: left; padding-left: 6px;">Dimas Arya Nugroho</td><td>L</td>
-            <td>H</td><td>H</td><td>H</td><td>H</td><td>H</td><td>H</td><td>H</td><td>H</td><td>H</td><td>H</td>
-            <td>10</td><td>0</td><td>0</td><td>0</td><td style="font-weight: bold;">100%</td>
-          </tr>
-        </tbody>
-      </table>
-
+      <p style="text-align: center;">Mata Pelajaran: ${subject} | Kelas: ${grade} | Semester: ${semester}</p>
       ${signatureHtml}
       `;
 
@@ -788,70 +504,7 @@ export function generateCurriculumFallback(params: GenerationParams): string {
       return `
       ${headerHtml}
       <h2 style="text-align: center; font-size: 14pt; font-weight: bold; text-decoration: underline; margin-bottom: 16px;">DAFTAR NILAI ASESMEN PEMBELAJARAN MENDALAM</h2>
-      
-      <table style="width: 100%; margin-bottom: 16px; border-collapse: collapse; font-size: 11pt;">
-        <tr><td style="width: 25%; font-weight: bold; padding: 3px 0;">Mata Pelajaran</td><td>: ${subject}</td></tr>
-        <tr><td style="font-weight: bold; padding: 3px 0;">Kelas / Fase</td><td>: Kelas ${grade} / Fase ${phase}</td></tr>
-        <tr><td style="font-weight: bold; padding: 3px 0;">Semester / TP</td><td>: ${semester} / ${schoolYear}</td></tr>
-        <tr><td style="font-weight: bold; padding: 3px 0;">Materi Acuan</td><td>: ${material}</td></tr>
-      </table>
-
-      <table style="width: 100%; border-collapse: collapse; font-size: 9pt; text-align: center;" border="1">
-        <thead>
-          <tr style="background-color: #1e3a8a; color: white;">
-            <th rowspan="2" style="padding: 4px; width: 4%;">No</th>
-            <th rowspan="2" style="padding: 4px; width: 25%;">Nama Peserta Didik</th>
-            <th colspan="2" style="padding: 4px;">Formatif (TP.1)</th>
-            <th colspan="2" style="padding: 4px;">Praktik (TP.2)</th>
-            <th colspan="2" style="padding: 4px;">Sumatif Lingkup</th>
-            <th rowspan="2" style="padding: 4px; width: 8%;">Nilai Akhir</th>
-            <th rowspan="2" style="padding: 4px; width: 25%;">Deskripsi Ketercapaian TP</th>
-          </tr>
-          <tr style="background-color: #3b82f6; color: white;">
-            <th>Tugas</th><th>Refleksi</th>
-            <th>Unjuk Kerja</th><th>Proyek</th>
-            <th>Tes Tulis</th><th>Gelar Karya</th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr>
-            <td>1</td>
-            <td style="text-align: left; padding-left: 6px; font-weight: bold;">Ahmad Fauzi Pratama</td>
-            <td>88</td><td>90</td><td>92</td><td>88</td><td>86</td><td>90</td>
-            <td style="font-weight: bold; color: #1e3a8a;">89.0</td>
-            <td style="text-align: left; padding: 4px 6px;">Sangat mahir memahami konsep dan sangat terampil dalam mempraktikkan gerakan secara mandiri.</td>
-          </tr>
-          <tr>
-            <td>2</td>
-            <td style="text-align: left; padding-left: 6px; font-weight: bold;">Aisyah Nur Rahmawati</td>
-            <td>85</td><td>86</td><td>88</td><td>85</td><td>84</td><td>87</td>
-            <td style="font-weight: bold; color: #1e3a8a;">85.8</td>
-            <td style="text-align: left; padding: 4px 6px;">Menunjukkan penguasaan materi yang baik, kolaboratif, dan reflektif dalam kegiatan tim.</td>
-          </tr>
-          <tr>
-            <td>3</td>
-            <td style="text-align: left; padding-left: 6px; font-weight: bold;">Bagas Dwi Saputra</td>
-            <td>82</td><td>84</td><td>85</td><td>82</td><td>80</td><td>84</td>
-            <td style="font-weight: bold; color: #1e3a8a;">82.8</td>
-            <td style="text-align: left; padding: 4px 6px;">Mencapai kriteria dengan baik pada praktik fisik, perlu sedikit peningkatan ketelitian pemahaman konsep.</td>
-          </tr>
-          <tr>
-            <td>4</td>
-            <td style="text-align: left; padding-left: 6px; font-weight: bold;">Cantika Dewi Lestari</td>
-            <td>90</td><td>92</td><td>94</td><td>92</td><td>90</td><td>92</td>
-            <td style="font-weight: bold; color: #1e3a8a;">91.7</td>
-            <td style="text-align: left; padding: 4px 6px;">Sangat istimewa dalam kepemimpinan kelompok, kreativitas gerak, dan kesadaran refleksi.</td>
-          </tr>
-          <tr>
-            <td>5</td>
-            <td style="text-align: left; padding-left: 6px; font-weight: bold;">Dimas Arya Nugroho</td>
-            <td>80</td><td>80</td><td>82</td><td>80</td><td>78</td><td>82</td>
-            <td style="font-weight: bold; color: #1e3a8a;">80.3</td>
-            <td style="text-align: left; padding: 4px 6px;">Tuntas mencapai seluruh indikator TP dengan sikap sportif dan semangat kebersamaan.</td>
-          </tr>
-        </tbody>
-      </table>
-
+      <p style="text-align: center;">Mata Pelajaran: ${subject} | Kelas: ${grade} | Materi: ${material}</p>
       ${signatureHtml}
       `;
 

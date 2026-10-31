@@ -1,406 +1,245 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef } from 'react';
+import { UserAccount, SavedDocument } from '../types';
+import { downloadWordDocument, printOrExportPdf } from '../utils/exportUtils';
 import {
-  Bold,
-  Italic,
-  Underline,
-  Heading1,
-  Heading2,
-  List,
-  Table as TableIcon,
-  Undo,
-  Redo,
-  Save,
   FileDown,
   Printer,
-  Eye,
-  Edit3,
-  AlignLeft,
-  AlignCenter,
-  AlignRight,
-  Sparkles,
+  Save,
   Check,
+  Copy,
+  ArrowLeft,
+  Sparkles,
+  Bold,
+  Italic,
+  List,
+  Heading,
+  Eye,
+  Edit3
 } from 'lucide-react';
-import { downloadWordDocument, printOrExportPdf } from '../utils/exportUtils';
 
 interface DocumentEditorProps {
-  initialContent: string;
-  documentTitle: string;
-  documentType: string;
-  onSave: (updatedContent: string) => void;
-  onContinueNextDoc?: () => void;
-  nextDocName?: string;
+  document: SavedDocument;
+  user: UserAccount;
+  onBack: () => void;
+  onSave: (updatedDoc: SavedDocument) => void;
 }
 
 export const DocumentEditor: React.FC<DocumentEditorProps> = ({
-  initialContent,
-  documentTitle,
-  documentType,
+  document,
+  user,
+  onBack,
   onSave,
-  onContinueNextDoc,
-  nextDocName,
 }) => {
-  const [content, setContent] = useState<string>(initialContent);
-  const [viewMode, setViewMode] = useState<'edit' | 'preview'>('edit');
-  const [fontFamily, setFontFamily] = useState<'times' | 'arial' | 'calibri'>('times');
-  const [fontSize, setFontSize] = useState<'sm' | 'md' | 'lg'>('md');
-  const [isSaved, setIsSaved] = useState<boolean>(false);
-  const [autoSaveStatus, setAutoSaveStatus] = useState<string>('Tersimpan di editor');
+  const [title, setTitle] = useState(document.title);
+  const [content, setContent] = useState(document.content);
+  const [isCopied, setIsCopied] = useState(false);
+  const [isSaved, setIsSaved] = useState(false);
+  const [viewMode, setViewMode] = useState<'preview' | 'edit'>('preview');
 
   const editorRef = useRef<HTMLDivElement>(null);
 
-  // Sync when initialContent changes
-  useEffect(() => {
-    setContent(initialContent);
-    if (editorRef.current) {
-      editorRef.current.innerHTML = initialContent;
-    }
-  }, [initialContent]);
-
-  // Handle rich text formatting commands
-  const executeCommand = (command: string, value: string | undefined = undefined) => {
-    document.execCommand(command, false, value);
-    if (editorRef.current) {
-      setContent(editorRef.current.innerHTML);
-      setAutoSaveStatus('Ada perubahan belum disimpan');
-    }
-  };
-
-  const insertTable = () => {
-    const tableHtml = `
-      <table style="width: 100%; border-collapse: collapse; margin: 12px 0;" border="1">
-        <thead>
-          <tr style="background-color: #f1f5f9;">
-            <th style="padding: 6px; border: 1px solid #334155;">No</th>
-            <th style="padding: 6px; border: 1px solid #334155;">Aktivitas / Indikator</th>
-            <th style="padding: 6px; border: 1px solid #334155;">Deskripsi Pelaksanaan</th>
-            <th style="padding: 6px; border: 1px solid #334155;">Keterangan</th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr>
-            <td style="padding: 6px; text-align: center; border: 1px solid #334155;">1</td>
-            <td style="padding: 6px; border: 1px solid #334155;">Pengamatan Mandiri</td>
-            <td style="padding: 6px; border: 1px solid #334155;">Peserta didik mengamati materi dengan kesadaran penuh.</td>
-            <td style="padding: 6px; border: 1px solid #334155;">Mindful</td>
-          </tr>
-        </tbody>
-      </table>
-      <p></p>
-    `;
-    executeCommand('insertHTML', tableHtml);
-  };
-
-  const handleInput = () => {
-    if (editorRef.current) {
-      setContent(editorRef.current.innerHTML);
-      setAutoSaveStatus('Ada perubahan belum disimpan');
-    }
-  };
-
-  const handleManualSave = () => {
+  const handleSave = () => {
     const currentHtml = editorRef.current ? editorRef.current.innerHTML : content;
-    onSave(currentHtml);
+    const updated: SavedDocument = {
+      ...document,
+      title,
+      content: currentHtml,
+      updatedAt: new Date().toISOString(),
+    };
+    onSave(updated);
+    setContent(currentHtml);
     setIsSaved(true);
-    setAutoSaveStatus('Berhasil disimpan ke arsip akun!');
-    setTimeout(() => setIsSaved(false), 2500);
+    setTimeout(() => setIsSaved(false), 2000);
   };
 
-  const handleExportWord = () => {
+  const handleDownloadWord = () => {
     const currentHtml = editorRef.current ? editorRef.current.innerHTML : content;
-    downloadWordDocument(currentHtml, documentTitle);
+    downloadWordDocument(
+      title.replace(/[^a-zA-Z0-9_-]/g, '_'),
+      title,
+      currentHtml,
+      user.schoolProfile,
+      user.teacherProfile
+    );
   };
 
-  const handlePrintOrPdf = () => {
+  const handlePrintPdf = () => {
     const currentHtml = editorRef.current ? editorRef.current.innerHTML : content;
-    printOrExportPdf(currentHtml, documentTitle);
+    printOrExportPdf(title, currentHtml);
   };
 
-  const fontClass = {
-    times: 'font-serif',
-    arial: 'font-sans',
-    calibri: 'font-sans',
-  }[fontFamily];
-
-  const fontSizeClass = {
-    sm: 'text-sm',
-    md: 'text-base',
-    lg: 'text-lg',
-  }[fontSize];
+  const handleCopyText = () => {
+    if (editorRef.current) {
+      navigator.clipboard.writeText(editorRef.current.innerText);
+    } else {
+      navigator.clipboard.writeText(content.replace(/<[^>]+>/g, ''));
+    }
+    setIsCopied(true);
+    setTimeout(() => setIsCopied(false), 2000);
+  };
 
   return (
-    <div className="bg-white rounded-2xl shadow-xl border border-slate-200 overflow-hidden flex flex-col my-6">
-      {/* Top Action Bar */}
-      <div className="px-6 py-4 bg-gradient-to-r from-slate-900 via-blue-950 to-indigo-950 text-white flex flex-wrap items-center justify-between gap-4">
-        <div>
-          <div className="flex items-center gap-2">
-            <span className="px-2 py-0.5 rounded text-[11px] font-black uppercase bg-amber-400 text-blue-950">
-              {documentType}
-            </span>
-            <h3 className="font-bold text-base sm:text-lg">{documentTitle}</h3>
+    <div className="space-y-4">
+      {/* Top Bar Navigation */}
+      <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-4 flex flex-col md:flex-row md:items-center justify-between gap-3">
+        <div className="flex items-center gap-3">
+          <button
+            onClick={onBack}
+            className="p-2 hover:bg-slate-100 rounded-xl text-slate-600 hover:text-slate-900 transition cursor-pointer"
+            title="Kembali ke Daftar"
+          >
+            <ArrowLeft className="w-5 h-5" />
+          </button>
+          <div>
+            <div className="flex items-center gap-2">
+              <span className="px-2 py-0.5 rounded text-[10px] font-bold uppercase bg-blue-100 text-blue-800">
+                {document.type}
+              </span>
+              <span className="text-xs text-slate-400">
+                Dibuat {new Date(document.createdAt).toLocaleDateString('id-ID')}
+              </span>
+            </div>
+            <input
+              type="text"
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+              className="text-base font-bold text-slate-900 mt-0.5 bg-transparent border-b border-transparent hover:border-slate-300 focus:border-blue-600 focus:outline-none w-full"
+            />
           </div>
-          <span className="text-xs text-blue-200 block mt-0.5">
-            Format Resmi Standar Pendidikan SD • Deep Learning Framework
-          </span>
         </div>
 
-        {/* Primary Action Buttons */}
+        {/* Action Buttons */}
         <div className="flex flex-wrap items-center gap-2">
-          {/* View Toggle */}
-          <div className="bg-white/10 p-1 rounded-xl flex items-center border border-white/10">
+          {/* Toggle View */}
+          <div className="bg-slate-100 p-1 rounded-xl flex items-center text-xs">
             <button
-              type="button"
-              onClick={() => setViewMode('edit')}
-              className={`px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-all ${
-                viewMode === 'edit'
-                  ? 'bg-white text-blue-950 shadow-sm'
-                  : 'text-blue-200 hover:text-white'
-              }`}
-            >
-              <Edit3 className="w-3.5 h-3.5" />
-              <span>Edit Teks</span>
-            </button>
-            <button
-              type="button"
               onClick={() => setViewMode('preview')}
-              className={`px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-all ${
-                viewMode === 'preview'
-                  ? 'bg-white text-blue-950 shadow-sm'
-                  : 'text-blue-200 hover:text-white'
+              className={`px-3 py-1.5 rounded-lg font-medium transition cursor-pointer flex items-center gap-1.5 ${
+                viewMode === 'preview' ? 'bg-white shadow-xs text-blue-900 font-bold' : 'text-slate-600'
               }`}
             >
               <Eye className="w-3.5 h-3.5" />
-              <span>Preview Cetak A4</span>
+              <span>Pratinjau Kertas A4</span>
+            </button>
+            <button
+              onClick={() => setViewMode('edit')}
+              className={`px-3 py-1.5 rounded-lg font-medium transition cursor-pointer flex items-center gap-1.5 ${
+                viewMode === 'edit' ? 'bg-white shadow-xs text-blue-900 font-bold' : 'text-slate-600'
+              }`}
+            >
+              <Edit3 className="w-3.5 h-3.5" />
+              <span>Mode Edit</span>
             </button>
           </div>
 
-          {/* Save Button */}
           <button
-            type="button"
-            onClick={handleManualSave}
-            className={`px-4 py-2 rounded-xl text-xs font-bold transition-all shadow-md flex items-center gap-1.5 ${
-              isSaved
-                ? 'bg-emerald-600 text-white ring-2 ring-emerald-300'
-                : 'bg-emerald-500 hover:bg-emerald-600 text-white active:scale-95'
-            }`}
+            onClick={handleCopyText}
+            className="px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition cursor-pointer"
+          >
+            {isCopied ? <Check className="w-4 h-4 text-emerald-600" /> : <Copy className="w-4 h-4" />}
+            <span>{isCopied ? 'Tersalin' : 'Salin Teks'}</span>
+          </button>
+
+          <button
+            onClick={handleSave}
+            className="px-3.5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-semibold flex items-center gap-1.5 shadow-sm transition cursor-pointer"
           >
             {isSaved ? <Check className="w-4 h-4" /> : <Save className="w-4 h-4" />}
-            <span>{isSaved ? 'Tersimpan!' : 'SIMPAN'}</span>
+            <span>{isSaved ? 'Tersimpan!' : 'Simpan'}</span>
           </button>
 
-          {/* Download Word */}
           <button
-            type="button"
-            onClick={handleExportWord}
-            className="px-3.5 py-2 bg-blue-700 hover:bg-blue-600 text-white rounded-xl text-xs font-bold transition-all shadow-md flex items-center gap-1.5"
-            title="Download file Microsoft Word (.doc)"
+            onClick={handleDownloadWord}
+            className="px-3.5 py-2 bg-blue-700 hover:bg-blue-800 text-white rounded-xl text-xs font-semibold flex items-center gap-1.5 shadow-sm transition cursor-pointer"
           >
-            <FileDown className="w-4 h-4 text-blue-200" />
-            <span>WORD (.DOC)</span>
+            <FileDown className="w-4 h-4" />
+            <span>Download Word (.doc)</span>
           </button>
 
-          {/* Print / PDF */}
           <button
-            type="button"
-            onClick={handlePrintOrPdf}
-            className="px-3.5 py-2 bg-indigo-700 hover:bg-indigo-600 text-white rounded-xl text-xs font-bold transition-all shadow-md flex items-center gap-1.5"
-            title="Download PDF atau Cetak ke Printer A4"
+            onClick={handlePrintPdf}
+            className="px-3.5 py-2 bg-slate-800 hover:bg-slate-900 text-white rounded-xl text-xs font-semibold flex items-center gap-1.5 shadow-sm transition cursor-pointer"
           >
-            <Printer className="w-4 h-4 text-indigo-200" />
-            <span>PDF / CETAK</span>
+            <Printer className="w-4 h-4" />
+            <span>Cetak / PDF</span>
           </button>
         </div>
       </div>
 
-      {/* Editor Formatting Toolbar (visible in edit mode) */}
-      {viewMode === 'edit' && (
-        <div className="px-4 py-2 bg-slate-100 border-b border-slate-200 flex flex-wrap items-center justify-between gap-2 text-slate-700">
-          <div className="flex flex-wrap items-center gap-1">
-            {/* Font Family selector */}
-            <select
-              value={fontFamily}
-              onChange={(e) => setFontFamily(e.target.value as any)}
-              className="px-2 py-1 text-xs bg-white border border-slate-300 rounded-lg text-slate-700"
-            >
-              <option value="times">Times New Roman (Standar Surat)</option>
-              <option value="arial">Arial (Modern Bersih)</option>
-              <option value="calibri">Calibri (Dokumen Formal)</option>
-            </select>
-
-            <select
-              value={fontSize}
-              onChange={(e) => setFontSize(e.target.value as any)}
-              className="px-2 py-1 text-xs bg-white border border-slate-300 rounded-lg text-slate-700"
-            >
-              <option value="sm">Ukuran Huruf Kecil (10pt)</option>
-              <option value="md">Ukuran Huruf Sedang (11pt)</option>
-              <option value="lg">Ukuran Huruf Besar (12pt)</option>
-            </select>
-
-            <div className="h-5 w-[1px] bg-slate-300 mx-1" />
-
-            <button
-              type="button"
-              onClick={() => executeCommand('bold')}
-              className="p-1.5 hover:bg-slate-200 rounded text-slate-700"
-              title="Tebal (Ctrl+B)"
-            >
-              <Bold className="w-4 h-4" />
-            </button>
-            <button
-              type="button"
-              onClick={() => executeCommand('italic')}
-              className="p-1.5 hover:bg-slate-200 rounded text-slate-700"
-              title="Miring (Ctrl+I)"
-            >
-              <Italic className="w-4 h-4" />
-            </button>
-            <button
-              type="button"
-              onClick={() => executeCommand('underline')}
-              className="p-1.5 hover:bg-slate-200 rounded text-slate-700"
-              title="Garis Bawah (Ctrl+U)"
-            >
-              <Underline className="w-4 h-4" />
-            </button>
-
-            <div className="h-5 w-[1px] bg-slate-300 mx-1" />
-
-            <button
-              type="button"
-              onClick={() => executeCommand('formatBlock', 'h2')}
-              className="p-1.5 hover:bg-slate-200 rounded text-slate-700"
-              title="Judul Bab (H2)"
-            >
-              <Heading1 className="w-4 h-4" />
-            </button>
-            <button
-              type="button"
-              onClick={() => executeCommand('formatBlock', 'h3')}
-              className="p-1.5 hover:bg-slate-200 rounded text-slate-700"
-              title="Sub Judul (H3)"
-            >
-              <Heading2 className="w-4 h-4" />
-            </button>
-            <button
-              type="button"
-              onClick={() => executeCommand('insertUnorderedList')}
-              className="p-1.5 hover:bg-slate-200 rounded text-slate-700"
-              title="Daftar Poin"
-            >
-              <List className="w-4 h-4" />
-            </button>
-
-            <div className="h-5 w-[1px] bg-slate-300 mx-1" />
-
-            <button
-              type="button"
-              onClick={() => executeCommand('justifyLeft')}
-              className="p-1.5 hover:bg-slate-200 rounded text-slate-700"
-              title="Rata Kiri"
-            >
-              <AlignLeft className="w-4 h-4" />
-            </button>
-            <button
-              type="button"
-              onClick={() => executeCommand('justifyCenter')}
-              className="p-1.5 hover:bg-slate-200 rounded text-slate-700"
-              title="Rata Tengah"
-            >
-              <AlignCenter className="w-4 h-4" />
-            </button>
-            <button
-              type="button"
-              onClick={() => executeCommand('justifyRight')}
-              className="p-1.5 hover:bg-slate-200 rounded text-slate-700"
-              title="Rata Kanan"
-            >
-              <AlignRight className="w-4 h-4" />
-            </button>
-
-            <div className="h-5 w-[1px] bg-slate-300 mx-1" />
-
-            <button
-              type="button"
-              onClick={insertTable}
-              className="p-1.5 hover:bg-slate-200 rounded text-slate-700 flex items-center gap-1 text-xs"
-              title="Sisipkan Tabel Rapi"
-            >
-              <TableIcon className="w-4 h-4 text-blue-700" />
-              <span className="hidden sm:inline">Tabel</span>
-            </button>
-
-            <div className="h-5 w-[1px] bg-slate-300 mx-1" />
-
-            <button
-              type="button"
-              onClick={() => executeCommand('undo')}
-              className="p-1.5 hover:bg-slate-200 rounded text-slate-700"
-              title="Undo (Ctrl+Z)"
-            >
-              <Undo className="w-4 h-4" />
-            </button>
-            <button
-              type="button"
-              onClick={() => executeCommand('redo')}
-              className="p-1.5 hover:bg-slate-200 rounded text-slate-700"
-              title="Redo"
-            >
-              <Redo className="w-4 h-4" />
-            </button>
+      {/* Document Sheet (Simulated A4 Paper) */}
+      <div className="bg-slate-200/70 p-4 sm:p-8 rounded-2xl flex justify-center overflow-x-auto min-h-[800px]">
+        <div className="bg-white shadow-2xl rounded-sm border border-slate-300 w-full max-w-[850px] p-8 sm:p-12 text-slate-900 font-serif relative">
+          
+          {/* Header Kop Surat Sekolah */}
+          <div className="border-b-4 border-double border-slate-900 pb-4 mb-6">
+            <div className="flex items-center gap-4">
+              {user.schoolProfile.logoUrl ? (
+                <img
+                  src={user.schoolProfile.logoUrl}
+                  alt="Logo Sekolah"
+                  className="w-20 h-20 object-contain shrink-0"
+                />
+              ) : (
+                <div className="w-20 h-20 rounded-full border-2 border-slate-800 flex items-center justify-center font-bold text-xs text-slate-700 text-center p-1 shrink-0">
+                  LOGO SEKOLAH
+                </div>
+              )}
+              <div className="text-center flex-1">
+                <h4 className="text-xs font-bold uppercase tracking-wider text-slate-700">
+                  PEMERINTAH {(user.schoolProfile.province || 'JAWA TENGAH').toUpperCase()}
+                </h4>
+                <h4 className="text-xs font-bold uppercase tracking-wider text-slate-700">
+                  DINAS PENDIDIKAN DAN KEBUDAYAAN {(user.schoolProfile.regency || 'KABUPATEN').toUpperCase()}
+                </h4>
+                <h2 className="text-base sm:text-lg font-black uppercase text-slate-950 mt-0.5">
+                  {(user.schoolProfile.schoolName || user.schoolProfile.name || 'SD NEGERI').toUpperCase()}
+                </h2>
+                <p className="text-[10px] text-slate-600 mt-0.5">
+                  {user.schoolProfile.address}, Kec. {user.schoolProfile.district}, {user.schoolProfile.regency} | NPSN: {user.schoolProfile.npsn}
+                </p>
+              </div>
+            </div>
           </div>
 
-          <div className="text-[11px] text-slate-500 font-medium">
-            {autoSaveStatus}
-          </div>
-        </div>
-      )}
+          {/* Editable Document Body */}
+          <div
+            ref={editorRef}
+            contentEditable={viewMode === 'edit'}
+            suppressContentEditableWarning
+            className={`prose max-w-none text-slate-900 leading-relaxed font-serif ${
+              viewMode === 'edit'
+                ? 'outline-2 outline-blue-500/50 p-2 rounded-lg bg-blue-50/20'
+                : 'outline-none'
+            }`}
+            dangerouslySetInnerHTML={{ __html: content }}
+          />
 
-      {/* Editor Canvas Container - Styled like a physical A4 sheet */}
-      <div className="bg-slate-200/80 p-4 sm:p-8 flex justify-center min-h-[600px] overflow-y-auto">
-        <div
-          className={`w-full max-w-[850px] bg-white rounded-lg shadow-xl p-8 sm:p-14 border border-slate-300 transition-all ${fontClass} ${fontSizeClass}`}
-          style={{
-            minHeight: '1050px',
-            boxSizing: 'border-box',
-          }}
-        >
-          {viewMode === 'edit' ? (
-            <div
-              ref={editorRef}
-              contentEditable
-              suppressContentEditableWarning
-              onInput={handleInput}
-              className="outline-none focus:outline-none min-h-[800px] leading-relaxed text-slate-900"
-            />
-          ) : (
-            <div
-              dangerouslySetInnerHTML={{ __html: content }}
-              className="leading-relaxed text-slate-900"
-            />
-          )}
+          {/* Signature Block */}
+          <div className="mt-12 pt-6 border-t border-slate-200 grid grid-cols-2 text-xs font-serif text-slate-900">
+            <div className="text-center">
+              <p>Mengetahui,</p>
+              <p className="font-semibold">Kepala {user.schoolProfile.schoolName}</p>
+              <div className="h-16"></div>
+              <p className="font-bold underline uppercase">{user.schoolProfile.headmaster?.name || 'Drs. H. Slamet Raharjo, M.Pd.'}</p>
+              <p>NIP. {user.schoolProfile.headmaster?.nip || '19680512 199303 1 004'}</p>
+            </div>
+
+            <div className="text-center">
+              <p>{user.schoolProfile.regency}, {new Date().toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })}</p>
+              <p className="font-semibold">Guru Mata Pelajaran</p>
+              <div className="h-16"></div>
+              <p className="font-bold underline uppercase">{user.teacherProfile.fullName}</p>
+              <p>NIP. {user.teacherProfile.nip}</p>
+            </div>
+          </div>
+
+          {/* Footer watermark branding */}
+          <div className="mt-8 pt-3 border-t border-slate-100 flex items-center justify-between text-[9px] text-slate-400">
+            <span>Dihasilkan dengan EDU PLAN AI – DEEP LEARNING</span>
+            <span>Developed by huseinapriyanto | 085725080078</span>
+          </div>
         </div>
       </div>
-
-      {/* Pipeline Navigation Footer */}
-      {onContinueNextDoc && nextDocName && (
-        <div className="px-6 py-3 bg-blue-50 border-t border-blue-200 flex flex-col sm:flex-row items-center justify-between gap-3">
-          <div className="flex items-center gap-2 text-xs text-blue-900">
-            <Sparkles className="w-4 h-4 text-amber-500" />
-            <span>
-              <strong>Keterhubungan Antarmenu Aktif:</strong> Dokumen ini siap menjadi acuan turunan otomatis untuk{' '}
-              <strong>{nextDocName}</strong>.
-            </span>
-          </div>
-          <button
-            type="button"
-            onClick={onContinueNextDoc}
-            className="px-4 py-2 bg-blue-900 hover:bg-blue-800 text-white rounded-xl text-xs font-bold transition-all shadow-sm flex items-center gap-1.5 whitespace-nowrap"
-          >
-            <span>Buat Dokumen Berikutnya ({nextDocName})</span>
-            <span>→</span>
-          </button>
-        </div>
-      )}
     </div>
   );
 };

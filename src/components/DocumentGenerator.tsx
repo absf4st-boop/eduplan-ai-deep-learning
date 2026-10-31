@@ -1,596 +1,581 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
+import {
+  DocumentType,
+  GenerationParams,
+  UserAccount,
+  SavedDocument
+} from '../types';
+import { generateCurriculumFallback } from '../services/curriculumGenerator';
+import { saveDocument } from '../services/storage';
+import { downloadWordDocument, printOrExportPdf } from '../utils/exportUtils';
 import {
   Sparkles,
-  Link as LinkIcon,
+  Wand2,
   BookOpen,
+  Calendar,
   Layers,
-  History,
+  FileText,
+  Save,
+  FileDown,
+  Printer,
   CheckCircle2,
-  Clock,
-  Zap,
+  AlertCircle,
+  RefreshCw,
+  Compass,
+  Smile,
+  Brain,
+  Lightbulb
 } from 'lucide-react';
-import { DocumentType, UserAccount, SavedDocument } from '../types';
-import { DocumentEditor } from './DocumentEditor';
-import { generateCurriculumFallback } from '../services/curriculumGenerator';
 
 interface DocumentGeneratorProps {
-  documentType: DocumentType;
-  currentUser: UserAccount;
-  savedDocuments: SavedDocument[];
-  onSaveDocument: (doc: SavedDocument) => void;
-  onNavigateToType: (type: DocumentType) => void;
+  initialType?: DocumentType;
+  user: UserAccount;
+  onDocumentCreated: (doc: SavedDocument) => void;
 }
 
-export const SUBJECT_OPTIONS = [
-  'PJOK',
-  'PAI dan Budi Pekerti',
-  'MATEMATIKA',
-  'BAHASA JAWA',
-  'BAHASA INDONESIA',
-  'IPAS',
-  'SENI MUSIK',
-  'SENI TARI',
-  'BAHASA INGGRIS',
-  'PENDIDIKAN PANCASILA',
+const DOCUMENT_MENU_LIST: { id: DocumentType; label: string; desc: string }[] = [
+  { id: 'TP', label: '1. TP – Tujuan Pembelajaran', desc: 'Rumusan tujuan berbasis kompetensi, konten, dan variasi mendalam' },
+  { id: 'ATP', label: '2. ATP – Alur Tujuan Pembelajaran', desc: 'Urutan capaian pembelajaran logis berfase terstruktur' },
+  { id: 'CP', label: '3. CP – Capaian Pembelajaran', desc: 'Pemetaan elemen, capaian fase dan analisis kompetensi' },
+  { id: 'RPP', label: '4. RPP – Rencana Pelaksanaan', desc: 'Format ringkas 1 lembar / terintegrasi Deep Learning' },
+  { id: 'MODUL_AJAR', label: '5. Modul Ajar Deep Learning', desc: 'Perangkat ajar komprehensif berkesadaran, bermakna, menggembirakan' },
+  { id: 'PROTA', label: '6. PROTA – Program Tahunan', desc: 'Alokasi waktu seluruh bab/materi selama satu tahun ajaran' },
+  { id: 'PROMES', label: '7. PROMES – Program Semester', desc: 'Distribusi materi mingguan per semester ganjil/genap' },
+  { id: 'LKPD', label: '8. LKPD – Lembar Kerja Siswa', desc: 'Aktivitas eksplorasi siswa kontekstual & reflektif' },
+  { id: 'JURNAL_HARIAN', label: '9. Jurnal Harian Mengajar', desc: 'Catatan pelaksanaan tatap muka harian, kendala & tindak lanjut' },
+  { id: 'DAFTAR_HADIR', label: '10. Daftar Hadir & Presensi', desc: 'Format absensi siswa SD terstruktur' },
+  { id: 'DAFTAR_NILAI', label: '11. Daftar Nilai & Asesmen', desc: 'Format rekapitulasi nilai formatif TP & sumatif STS/SAS' },
 ];
-
-export const GRADE_PHASE_MAP: Record<string, string> = {
-  '1': 'A',
-  '2': 'A',
-  '3': 'B',
-  '4': 'B',
-  '5': 'C',
-  '6': 'C',
-};
-
-export const DOC_PIPELINE_ORDER: DocumentType[] = [
-  'CP',
-  'TP',
-  'ATP',
-  'PROTA',
-  'PROMES',
-  'RPP',
-  'MODUL_AJAR',
-  'LKPD',
-  'JURNAL',
-  'HADIR',
-  'NILAI',
-];
-
-export const DOC_TITLES: Record<DocumentType, string> = {
-  CP: 'Capaian Pembelajaran (CP)',
-  TP: 'Tujuan Pembelajaran (TP)',
-  ATP: 'Alur Tujuan Pembelajaran (ATP)',
-  RPP: 'Rencana Pelaksanaan Pembelajaran (RPP)',
-  MODUL_AJAR: 'Modul Ajar Deep Learning',
-  PROTA: 'Program Tahunan (PROTA)',
-  PROMES: 'Program Semester (PROMES)',
-  LKPD: 'Lembar Kerja Peserta Didik (LKPD)',
-  JURNAL: 'Jurnal Harian Guru',
-  HADIR: 'Daftar Hadir Peserta Didik',
-  NILAI: 'Daftar Nilai Asesmen',
-};
-
-export const DEFAULT_MATERIALS: Record<string, string> = {
-  PJOK: 'Aktivitas Kebugaran Jasmani & Pola Hidup Sehat Berkelanjutan',
-  'PAI dan Budi Pekerti': 'Meneladani Sifat Akhlak Mulia dan Kasih Sayang terhadap Sesama',
-  MATEMATIKA: 'Operasi Hitung Pecahan dan Pengukuran dalam Kehidupan Sehari-hari',
-  'BAHASA JAWA': 'Unggah-Ungguh Basa lan Maca Geguritan Kanthi Rasa Pangrasa',
-  'BAHASA INDONESIA': 'Menulis Teks Eksplanasi Fakta dan Menyimak Berkesadaran',
-  IPAS: 'Ekosistem dan Harmoni Keanekaragaman Hayati di Lingkungan Sekitar',
-  'SENI MUSIK': 'Irama, Pola Ritme, dan Bernyanyi Lagu Daerah Secara Harmonis',
-  'SENI TARI': 'Eksplorasi Gerak Tari Tradisional Berpola Ruang dan Level',
-  'BAHASA INGGRIS': 'Daily Activities and Asking for Help with Polite Expression',
-  'PENDIDIKAN PANCASILA': 'Penerapan Nilai Gotong Royong dan Hak Kewajiban Warga Negara',
-};
 
 export const DocumentGenerator: React.FC<DocumentGeneratorProps> = ({
-  documentType,
-  currentUser,
-  savedDocuments,
-  onSaveDocument,
-  onNavigateToType,
+  initialType = 'MODUL_AJAR',
+  user,
+  onDocumentCreated,
 }) => {
-  // Settings state (Default: PJOK - Kelas 5 - Fase C)
-  const [subject, setSubject] = useState<string>('PJOK');
-  const [grade, setGrade] = useState<string>('5');
-  const [phase, setPhase] = useState<string>('C');
-  const [semester, setSemester] = useState<string>('1 (Ganjil)');
-  const [schoolYear, setSchoolYear] = useState<string>(currentUser.schoolProfile.schoolYear || '2026/2027');
-  const [material, setMaterial] = useState<string>(DEFAULT_MATERIALS['PJOK']);
-  const [additionalInstructions, setAdditionalInstructions] = useState<string>('');
+  const [docType, setDocType] = useState<DocumentType>(initialType);
 
-  // Deep learning dimension selections
-  const [selectedDimensions, setSelectedDimensions] = useState<string[]>([
-    'Penalaran kritis',
-    'Kolaborasi',
-    'Kemandirian',
-    'Kesehatan',
-  ]);
+  // Form parameters
+  const [subject, setSubject] = useState(user.schoolProfile.activeSubject || 'PJOK');
+  const [grade, setGrade] = useState(user.schoolProfile.activeGrade || '5');
+  const [phase, setPhase] = useState(user.schoolProfile.activePhase || 'Fase C');
+  const [semester, setSemester] = useState<'1 (Ganjil)' | '2 (Genap)'>('1 (Ganjil)');
+  const [academicYear, setAcademicYear] = useState(user.schoolProfile.academicYear || '2026/2027');
+  const [topic, setTopic] = useState('Kombinasi Pola Gerak Dasar Lokomotor, Nonlokomotor, dan Manipulatif');
+  const [duration, setDuration] = useState('3 JP (3 x 35 Menit)');
+  const [learningModel, setLearningModel] = useState('Problem-Based Learning terpadu Deep Learning');
+  const [additionalPrompt, setAdditionalPrompt] = useState('');
+
+  // 3 Deep Learning Principles
+  const [includeMindful, setIncludeMindful] = useState(true);
+  const [includeMeaningful, setIncludeMeaningful] = useState(true);
+  const [includeJoyful, setIncludeJoyful] = useState(true);
 
   // Generation status
-  const [isGenerating, setIsGenerating] = useState<boolean>(false);
-  const [generationStep, setGenerationStep] = useState<number>(0);
+  const [isGenerating, setIsGenerating] = useState(false);
   const [generatedHtml, setGeneratedHtml] = useState<string | null>(null);
-  const [linkedDocs, setLinkedDocs] = useState<SavedDocument[]>([]);
-  const [sourceNotice, setSourceNotice] = useState<string | null>(null);
+  const [generatedTitle, setGeneratedTitle] = useState('');
+  const [engineSource, setEngineSource] = useState<'cloud_ai' | 'smart_fallback' | null>(null);
+  const [savedSuccess, setSavedSuccess] = useState(false);
 
-  // Sync phase whenever grade changes
-  useEffect(() => {
-    setPhase(GRADE_PHASE_MAP[grade] || 'C');
-  }, [grade]);
-
-  // Sync default material when subject changes
-  useEffect(() => {
-    if (DEFAULT_MATERIALS[subject]) {
-      setMaterial(DEFAULT_MATERIALS[subject]);
-    }
-  }, [subject]);
-
-  // Find upstream linked documents (e.g. for TP, look for CP; for ATP, look for TP, etc.)
-  useEffect(() => {
-    const upstreamTypes: Record<DocumentType, DocumentType[]> = {
-      CP: [],
-      TP: ['CP'],
-      ATP: ['TP', 'CP'],
-      PROTA: ['ATP', 'TP'],
-      PROMES: ['ATP', 'TP'],
-      RPP: ['MODUL_AJAR', 'ATP', 'TP', 'CP'],
-      MODUL_AJAR: ['ATP', 'TP', 'CP'],
-      LKPD: ['MODUL_AJAR', 'RPP', 'TP'],
-      JURNAL: ['MODUL_AJAR', 'ATP'],
-      HADIR: [],
-      NILAI: ['TP', 'MODUL_AJAR'],
-    };
-
-    const targetUpstreams = upstreamTypes[documentType] || [];
-    const matched = savedDocuments.filter(
-      (d) => targetUpstreams.includes(d.documentType) && d.subject === subject && d.grade === grade
-    );
-    setLinkedDocs(matched);
-  }, [documentType, subject, grade, savedDocuments]);
-
-  // Use previous document data
-  const handleUsePreviousDoc = (doc: SavedDocument) => {
-    setMaterial(doc.material);
-    setSourceNotice(`Data diambil dari dokumen sumber: ${doc.title} (${doc.documentType})`);
-    setTimeout(() => setSourceNotice(null), 4000);
+  // Auto set phase based on grade
+  const handleGradeChange = (g: string) => {
+    setGrade(g);
+    if (g === '1' || g === '2') setPhase('Fase A');
+    else if (g === '3' || g === '4') setPhase('Fase B');
+    else setPhase('Fase C');
   };
 
-  const toggleDimension = (dim: string) => {
-    if (selectedDimensions.includes(dim)) {
-      setSelectedDimensions(selectedDimensions.filter((d) => d !== dim));
-    } else {
-      setSelectedDimensions([...selectedDimensions, dim]);
-    }
-  };
-
-  const handleGenerate = async () => {
+  const handleGenerate = async (e: React.FormEvent) => {
+    e.preventDefault();
     setIsGenerating(true);
-    setGenerationStep(1);
+    setSavedSuccess(false);
 
-    // Prepare context documents for prompt
-    const contextMap: Record<string, string> = {};
-    linkedDocs.forEach((d) => {
-      contextMap[`${d.documentType}_${d.title}`] = d.content.substring(0, 1500);
-    });
-
-    const stepInterval = setInterval(() => {
-      setGenerationStep((prev) => (prev < 4 ? prev + 1 : prev));
-    }, 800);
-
-    let docContent: string | null = null;
-
-    try {
-      // 1. First attempt: call server endpoint /api/generate (works on AI Studio, Express, or Netlify Functions)
-      try {
-        const response = await fetch('/api/generate', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            documentType,
-            subject,
-            grade,
-            phase,
-            semester,
-            schoolYear,
-            material,
-            additionalInstructions: `${additionalInstructions}. Dimensi Profil Lulusan: ${selectedDimensions.join(', ')}. Pendekatan 3 Prinsip Deep Learning (Mindful, Meaningful, Joyful).`,
-            teacher: currentUser.teacherProfile,
-            school: currentUser.schoolProfile,
-            contextDocuments: contextMap,
-          }),
-        });
-
-        if (response.ok) {
-          const contentType = response.headers.get('content-type') || '';
-          if (contentType.includes('application/json')) {
-            const data = await response.json();
-            if (data && data.content) {
-              docContent = data.content;
-            }
-          }
-        }
-      } catch (fetchErr) {
-        console.warn('API /api/generate offline / static hosting (GitHub Pages), using client engine:', fetchErr);
-      }
-
-      // 2. Second attempt: If backend is not available (GitHub Pages / static Netlify), use high-fidelity Deep Learning Curriculum Engine
-      if (!docContent) {
-        docContent = generateCurriculumFallback({
-          documentType,
-          subject,
-          grade,
-          phase,
-          semester,
-          schoolYear,
-          material,
-          teacher: currentUser.teacherProfile,
-          school: currentUser.schoolProfile,
-          additionalInstructions: `${additionalInstructions}. Dimensi Profil Lulusan: ${selectedDimensions.join(', ')}. Pendekatan 3 Prinsip Deep Learning (Mindful, Meaningful, Joyful).`,
-        });
-      }
-
-      clearInterval(stepInterval);
-      setGenerationStep(5);
-
-      setTimeout(() => {
-        setIsGenerating(false);
-        if (docContent) {
-          setGeneratedHtml(docContent);
-        }
-      }, 500);
-    } catch (err) {
-      console.error('Generation error fallback:', err);
-      clearInterval(stepInterval);
-      const safeContent = generateCurriculumFallback({
-        documentType,
-        subject,
-        grade,
-        phase,
-        semester,
-        schoolYear,
-        material,
-        teacher: currentUser.teacherProfile,
-        school: currentUser.schoolProfile,
-        additionalInstructions,
-      });
-      setIsGenerating(false);
-      setGeneratedHtml(safeContent);
-    }
-  };
-
-  const handleSaveToWorkspace = (contentToSave: string) => {
-    const newDoc: SavedDocument = {
-      id: 'doc_' + Date.now(),
-      userId: currentUser.id,
-      documentType,
-      title: `${DOC_TITLES[documentType]} - ${subject} Kelas ${grade}`,
+    const params: GenerationParams = {
+      type: docType,
       subject,
       grade,
       phase,
       semester,
-      schoolYear,
-      material,
-      content: contentToSave,
-      sourceDocumentIds: linkedDocs.map((d) => d.id),
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
+      academicYear,
+      topic: topic.trim() || 'Pembelajaran Tematik & Keterampilan Esensial SD',
+      duration,
+      learningModel,
+      additionalPrompt,
+      principles: {
+        mindful: includeMindful,
+        meaningful: includeMeaningful,
+        joyful: includeJoyful,
+      },
     };
-    onSaveDocument(newDoc);
+
+    let resultHtml = '';
+    let usedSource: 'cloud_ai' | 'smart_fallback' = 'smart_fallback';
+
+    // 1. Try server-side API proxy first (Vite dev middleware or Netlify function)
+    try {
+      const response = await fetch('/api/generate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          params,
+          schoolProfile: user.schoolProfile,
+          teacherProfile: user.teacherProfile,
+        }),
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        if (data.html && data.html.length > 50) {
+          resultHtml = data.html;
+          usedSource = 'cloud_ai';
+        }
+      }
+    } catch (err) {
+      // Server not reachable or static host (Netlify static / GitHub Pages)
+      console.log('Using robust client-side Deep Learning generation engine.');
+    }
+
+    // 2. Fallback to client-side curriculum engine if API did not return HTML
+    if (!resultHtml) {
+      resultHtml = generateCurriculumFallback(
+        params,
+        user.schoolProfile,
+        user.teacherProfile
+      );
+      usedSource = 'smart_fallback';
+    }
+
+    const docTitle = `${docType.replace('_', ' ')}: ${topic} (${subject} Kelas ${grade})`;
+    setGeneratedTitle(docTitle);
+    setGeneratedHtml(resultHtml);
+    setEngineSource(usedSource);
+    setIsGenerating(false);
+
+    // Scroll to preview smoothly
+    setTimeout(() => {
+      document.getElementById('generation-preview-anchor')?.scrollIntoView({ behavior: 'smooth' });
+    }, 100);
   };
 
-  // Next document in pipeline
-  const currentIndex = DOC_PIPELINE_ORDER.indexOf(documentType);
-  const nextDocType = currentIndex >= 0 && currentIndex < DOC_PIPELINE_ORDER.length - 1
-    ? DOC_PIPELINE_ORDER[currentIndex + 1]
-    : null;
+  const handleSaveToDocs = () => {
+    if (!generatedHtml) return;
+
+    const newDoc: SavedDocument = {
+      id: 'doc_' + Date.now(),
+      userId: user.id,
+      title: generatedTitle,
+      type: docType,
+      subject,
+      grade,
+      semester,
+      academicYear,
+      topic,
+      content: generatedHtml,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+      deepLearningTags: ['Mindful', 'Meaningful', 'Joyful'],
+    };
+
+    saveDocument(newDoc);
+    onDocumentCreated(newDoc);
+    setSavedSuccess(true);
+    setTimeout(() => setSavedSuccess(false), 2500);
+  };
+
+  const handleDownloadDoc = () => {
+    if (!generatedHtml) return;
+    downloadWordDocument(
+      `${docType}_${subject}_Kelas${grade}_${topic}`.replace(/[^a-zA-Z0-9_-]/g, '_'),
+      generatedTitle,
+      generatedHtml,
+      user.schoolProfile,
+      user.teacherProfile
+    );
+  };
+
+  const handlePrint = () => {
+    if (!generatedHtml) return;
+    printOrExportPdf(generatedTitle, generatedHtml);
+  };
 
   return (
     <div className="space-y-6">
-      {/* Header Info Banner */}
-      <div className="bg-gradient-to-r from-blue-900 via-blue-800 to-indigo-900 rounded-2xl p-6 text-white shadow-lg border border-blue-800/50">
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-          <div>
-            <div className="flex items-center gap-2">
-              <span className="px-2.5 py-1 bg-amber-400 text-blue-950 font-black text-xs rounded-lg uppercase tracking-wider">
-                ADMINISTRASI GURU SD
-              </span>
-              <span className="text-xs text-blue-200">
-                Tahun Ajaran {schoolYear}
-              </span>
-            </div>
-            <h2 className="text-2xl font-black mt-2 tracking-tight">
-              {DOC_TITLES[documentType]}
-            </h2>
-            <p className="text-xs sm:text-sm text-blue-100 max-w-2xl mt-1 leading-relaxed">
-              Disusun berbasis kerangka <strong>Pembelajaran Mendalam (Deep Learning)</strong>: Berkesadaran (Mindful), Bermakna (Meaningful), dan Menggembirakan (Joyful).
-            </p>
-          </div>
-
-          <div className="flex items-center gap-2 bg-white/10 backdrop-blur-md p-2.5 rounded-xl border border-white/10 self-start md:self-auto">
-            <Zap className="w-5 h-5 text-amber-400" />
-            <div className="text-left">
-              <span className="text-[10px] uppercase tracking-wider text-blue-200 block font-bold">
-                Kecepatan Generator
-              </span>
-              <span className="text-xs font-bold text-white">Target Optimal 5 Detik</span>
-            </div>
-          </div>
+      {/* 11 Menu Selector Grid */}
+      <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm">
+        <div className="flex items-center justify-between mb-3">
+          <h3 className="font-bold text-slate-900 text-sm flex items-center gap-2">
+            <Layers className="w-4 h-4 text-blue-700" />
+            <span>Pilih Jenis Dokumen Administrasi SD (11 Menu Lengkap):</span>
+          </h3>
+          <span className="text-[11px] font-semibold text-amber-700 bg-amber-50 px-2.5 py-1 rounded-full border border-amber-200">
+            Pendekatan Deep Learning
+          </span>
         </div>
-      </div>
 
-      {/* Linked Documents Banner (Sistem Keterhubungan Antarmenu) */}
-      {linkedDocs.length > 0 && (
-        <div className="bg-amber-50/80 border border-amber-200 rounded-2xl p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-sm">
-          <div className="flex items-start gap-2.5">
-            <LinkIcon className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
-            <div>
-              <h4 className="text-xs font-bold text-amber-950">
-                Sistem Keterhubungan Antarmenu Aktif
-              </h4>
-              <p className="text-[11px] text-amber-800">
-                Ditemukan {linkedDocs.length} dokumen acuan terkait ({linkedDocs.map((d) => d.documentType).join(', ')}). Anda dapat menggunakan data yang sudah ada agar materi sinkron secara otomatis.
-              </p>
-            </div>
-          </div>
-
-          <div className="flex flex-wrap items-center gap-2">
-            {linkedDocs.slice(0, 2).map((doc) => (
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2 text-xs">
+          {DOCUMENT_MENU_LIST.map((item) => {
+            const isSelected = docType === item.id;
+            return (
               <button
-                key={doc.id}
+                key={item.id}
                 type="button"
-                onClick={() => handleUsePreviousDoc(doc)}
-                className="px-3 py-1.5 bg-amber-200 hover:bg-amber-300 text-amber-950 text-xs font-bold rounded-lg transition-colors flex items-center gap-1"
+                onClick={() => setDocType(item.id)}
+                className={`p-2.5 rounded-xl border text-left transition cursor-pointer flex flex-col justify-between ${
+                  isSelected
+                    ? 'bg-blue-900 text-white border-blue-900 shadow-md ring-2 ring-blue-500/30'
+                    : 'bg-slate-50 hover:bg-blue-50/50 text-slate-700 border-slate-200'
+                }`}
               >
-                <span>Gunakan Data {doc.documentType}</span>
+                <div className="font-bold">{item.label}</div>
+                <div className={`text-[10px] mt-1 line-clamp-1 ${isSelected ? 'text-blue-200' : 'text-slate-500'}`}>
+                  {item.desc}
+                </div>
               </button>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {sourceNotice && (
-        <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-xl text-xs text-emerald-800 flex items-center gap-2 animate-fade-in">
-          <CheckCircle2 className="w-4 h-4 text-emerald-600" />
-          <span>{sourceNotice}</span>
-        </div>
-      )}
-
-      {/* Settings Grid */}
-      <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-6 space-y-6">
-        <h3 className="font-bold text-slate-900 text-base flex items-center gap-2 border-b border-slate-100 pb-3">
-          <Layers className="w-5 h-5 text-blue-900" />
-          <span>Pengaturan Pembelajaran</span>
-        </h3>
-
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-          {/* Mata Pelajaran */}
-          <div>
-            <label className="block text-xs font-bold text-slate-700 mb-1.5">
-              Mata Pelajaran (10 Pilihan) *
-            </label>
-            <select
-              value={subject}
-              onChange={(e) => setSubject(e.target.value)}
-              className="w-full px-3 py-2 text-sm border border-slate-300 rounded-xl font-medium focus:ring-2 focus:ring-blue-500 focus:outline-none bg-white"
-            >
-              {SUBJECT_OPTIONS.map((subj) => (
-                <option key={subj} value={subj}>
-                  {subj}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          {/* Kelas & Fase */}
-          <div>
-            <label className="block text-xs font-bold text-slate-700 mb-1.5">
-              Kelas & Fase *
-            </label>
-            <select
-              value={grade}
-              onChange={(e) => setGrade(e.target.value)}
-              className="w-full px-3 py-2 text-sm border border-slate-300 rounded-xl font-medium focus:ring-2 focus:ring-blue-500 focus:outline-none bg-white"
-            >
-              <option value="1">Kelas 1 (Fase A)</option>
-              <option value="2">Kelas 2 (Fase A)</option>
-              <option value="3">Kelas 3 (Fase B)</option>
-              <option value="4">Kelas 4 (Fase B)</option>
-              <option value="5">Kelas 5 (Fase C)</option>
-              <option value="6">Kelas 6 (Fase C)</option>
-            </select>
-          </div>
-
-          {/* Semester */}
-          <div>
-            <label className="block text-xs font-bold text-slate-700 mb-1.5">
-              Semester *
-            </label>
-            <select
-              value={semester}
-              onChange={(e) => setSemester(e.target.value)}
-              className="w-full px-3 py-2 text-sm border border-slate-300 rounded-xl font-medium focus:ring-2 focus:ring-blue-500 focus:outline-none bg-white"
-            >
-              <option value="1 (Ganjil)">Semester 1 (Ganjil)</option>
-              <option value="2 (Genap)">Semester 2 (Genap)</option>
-            </select>
-          </div>
-
-          {/* Tahun Pelajaran */}
-          <div>
-            <label className="block text-xs font-bold text-slate-700 mb-1.5">
-              Tahun Pelajaran *
-            </label>
-            <input
-              type="text"
-              value={schoolYear}
-              onChange={(e) => setSchoolYear(e.target.value)}
-              className="w-full px-3 py-2 text-sm border border-slate-300 rounded-xl font-medium focus:ring-2 focus:ring-blue-500 focus:outline-none bg-white"
-              placeholder="2026/2027"
-            />
-          </div>
-        </div>
-
-        {/* Topik / Materi Pembelajaran */}
-        <div>
-          <label className="block text-xs font-bold text-slate-700 mb-1.5">
-            Topik / Materi Pembelajaran *
-          </label>
-          <input
-            type="text"
-            required
-            value={material}
-            onChange={(e) => setMaterial(e.target.value)}
-            className="w-full px-3.5 py-2.5 text-sm border border-slate-300 rounded-xl font-medium focus:ring-2 focus:ring-blue-500 focus:outline-none bg-white"
-            placeholder="Contoh: Aktivitas Kebugaran Jasmani dan Pola Hidup Sehat"
-          />
-        </div>
-
-        {/* 8 Dimensi Profil Lulusan */}
-        <div>
-          <label className="block text-xs font-bold text-slate-700 mb-2">
-            Delapan Dimensi Profil Lulusan (Deep Learning Framework)
-          </label>
-          <div className="flex flex-wrap gap-2">
-            {[
-              'Keimanan dan ketakwaan',
-              'Kewargaan',
-              'Penalaran kritis',
-              'Kreativitas',
-              'Kolaborasi',
-              'Kemandirian',
-              'Kesehatan',
-              'Komunikasi',
-            ].map((dim) => {
-              const active = selectedDimensions.includes(dim);
-              return (
-                <button
-                  key={dim}
-                  type="button"
-                  onClick={() => toggleDimension(dim)}
-                  className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition-all ${
-                    active
-                      ? 'bg-blue-900 text-white shadow-sm'
-                      : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
-                  }`}
-                >
-                  {active ? '✓ ' : '+ '}
-                  {dim}
-                </button>
-              );
-            })}
-          </div>
-        </div>
-
-        {/* Instruksi Tambahan */}
-        <div>
-          <label className="block text-xs font-bold text-slate-700 mb-1.5">
-            Instruksi / Catatan Khusus Guru (Opsional)
-          </label>
-          <textarea
-            rows={2}
-            value={additionalInstructions}
-            onChange={(e) => setAdditionalInstructions(e.target.value)}
-            className="w-full px-3 py-2 text-sm border border-slate-300 rounded-xl font-medium focus:ring-2 focus:ring-blue-500 focus:outline-none"
-            placeholder="Contoh: Sertakan permainan tradisional beregu, tambahkan rubrik asesmen unjuk kerja untuk murid berkebutuhan khusus."
-          />
-        </div>
-
-        {/* Generate Button */}
-        <div className="pt-2 flex flex-col sm:flex-row items-center justify-between gap-3">
-          <div className="flex items-center gap-2 text-xs text-slate-500">
-            <BookOpen className="w-4 h-4 text-blue-800" />
-            <span>
-              Identitas otomatis: <strong>{currentUser.teacherProfile.name}</strong> •{' '}
-              <strong>{currentUser.schoolProfile.name}</strong>
-            </span>
-          </div>
-
-          <button
-            type="button"
-            disabled={isGenerating}
-            onClick={handleGenerate}
-            className="w-full sm:w-auto px-6 py-3 bg-gradient-to-r from-blue-900 via-indigo-900 to-blue-900 hover:from-blue-800 hover:to-indigo-800 text-white font-black text-sm rounded-xl transition-all shadow-lg hover:shadow-xl hover:scale-[1.02] active:scale-95 disabled:opacity-50 flex items-center justify-center gap-2.5"
-          >
-            <Sparkles className="w-5 h-5 text-amber-400" />
-            <span>GENERATE DENGAN AI</span>
-          </button>
+            );
+          })}
         </div>
       </div>
 
-      {/* AI 5-Second Generation Progress Overlay / Animation */}
-      {isGenerating && (
-        <div className="bg-white rounded-2xl shadow-xl border border-blue-200 p-8 text-center space-y-5 animate-pulse">
-          <div className="w-16 h-16 bg-blue-50 text-blue-900 rounded-2xl flex items-center justify-center mx-auto shadow-inner">
-            <Sparkles className="w-8 h-8 text-amber-500 animate-spin" />
-          </div>
-
+      {/* Generator Form */}
+      <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm space-y-6">
+        <div className="flex items-center justify-between pb-4 border-b border-slate-100">
           <div>
-            <h4 className="text-lg font-bold text-slate-900">
-              EDU PLAN AI sedang menyusun administrasi pembelajaran Anda...
-            </h4>
-            <p className="text-xs text-slate-500 mt-1">
-              Menyelaraskan kerangka Pembelajaran Mendalam (Mindful, Meaningful, Joyful)
+            <h2 className="text-base font-bold text-slate-900 flex items-center gap-2">
+              <Wand2 className="w-5 h-5 text-blue-700" />
+              <span>Form Parameter Pembuatan Dokumen {docType.replace('_', ' ')}</span>
+            </h2>
+            <p className="text-xs text-slate-500 mt-0.5">
+              Identitas guru dan sekolah ({user.schoolProfile.schoolName}) diterapkan secara otomatis.
             </p>
           </div>
-
-          {/* Stepper Progress */}
-          <div className="max-w-md mx-auto space-y-2">
-            {[
-              'Membaca identitas pembelajaran...',
-              'Menghubungkan CP, TP, dan ATP...',
-              'Menyusun kegiatan pembelajaran mendalam...',
-              'Menyusun instrumen asesmen & rubrik...',
-              'Menyelesaikan dokumen siap pakai...',
-            ].map((stepText, idx) => {
-              const isCompleted = generationStep > idx + 1;
-              const isCurrent = generationStep === idx + 1;
-              return (
-                <div
-                  key={idx}
-                  className={`flex items-center gap-3 text-xs p-2 rounded-lg transition-all ${
-                    isCurrent
-                      ? 'bg-blue-50 text-blue-900 font-bold border border-blue-200'
-                      : isCompleted
-                      ? 'text-emerald-700 font-medium'
-                      : 'text-slate-400'
-                  }`}
-                >
-                  <div
-                    className={`w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold ${
-                      isCompleted
-                        ? 'bg-emerald-600 text-white'
-                        : isCurrent
-                        ? 'bg-blue-900 text-white animate-bounce'
-                        : 'bg-slate-200 text-slate-600'
-                    }`}
-                  >
-                    {isCompleted ? '✓' : idx + 1}
-                  </div>
-                  <span>{stepText}</span>
-                </div>
-              );
-            })}
-          </div>
-
-          <div className="flex items-center justify-center gap-1.5 text-xs text-slate-400">
-            <Clock className="w-3.5 h-3.5" />
-            <span>Target generasi secepat 5 detik...</span>
+          <div className="hidden sm:flex items-center gap-2 text-xs text-emerald-800 bg-emerald-50 px-3 py-1.5 rounded-xl border border-emerald-200">
+            <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+            <span>Kop Sekolah & Tanda Tangan Siap</span>
           </div>
         </div>
-      )}
 
-      {/* Editor Result */}
-      {generatedHtml && !isGenerating && (
-        <DocumentEditor
-          initialContent={generatedHtml}
-          documentTitle={`${DOC_TITLES[documentType]} - ${subject} Kelas ${grade}`}
-          documentType={documentType}
-          onSave={handleSaveToWorkspace}
-          onContinueNextDoc={nextDocType ? () => onNavigateToType(nextDocType) : undefined}
-          nextDocName={nextDocType ? DOC_TITLES[nextDocType] : undefined}
-        />
+        <form onSubmit={handleGenerate} className="space-y-5">
+          {/* Row 1: Subject, Grade, Phase, Semester */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 text-xs">
+            <div>
+              <label className="block font-semibold text-slate-700 mb-1">Mata Pelajaran (SD)</label>
+              <select
+                value={subject}
+                onChange={(e) => setSubject(e.target.value)}
+                className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl focus:ring-2 focus:ring-blue-600 focus:outline-none font-medium"
+              >
+                <option value="PJOK">1. PJOK</option>
+                <option value="PAI dan Budi Pekerti">2. PAI dan Budi Pekerti</option>
+                <option value="MATEMATIKA">3. MATEMATIKA</option>
+                <option value="BAHASA JAWA">4. BAHASA JAWA</option>
+                <option value="BAHASA INDONESIA">5. BAHASA INDONESIA</option>
+                <option value="IPAS">6. IPAS</option>
+                <option value="SENI MUSIK">7. SENI MUSIK</option>
+                <option value="SENI TARI">8. SENI TARI</option>
+                <option value="BAHASA INGGRIS">9. BAHASA INGGRIS</option>
+                <option value="PENDIDIKAN PANCASILA">10. PENDIDIKAN PANCASILA</option>
+              </select>
+            </div>
+
+            <div>
+              <label className="block font-semibold text-slate-700 mb-1">Kelas SD</label>
+              <select
+                value={grade}
+                onChange={(e) => handleGradeChange(e.target.value)}
+                className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl focus:ring-2 focus:ring-blue-600 focus:outline-none font-medium"
+              >
+                <option value="1">Kelas 1 (Fase A)</option>
+                <option value="2">Kelas 2 (Fase A)</option>
+                <option value="3">Kelas 3 (Fase B)</option>
+                <option value="4">Kelas 4 (Fase B)</option>
+                <option value="5">Kelas 5 (Fase C)</option>
+                <option value="6">Kelas 6 (Fase C)</option>
+              </select>
+            </div>
+
+            <div>
+              <label className="block font-semibold text-slate-700 mb-1">Fase Pembelajaran</label>
+              <input
+                type="text"
+                readOnly
+                value={phase}
+                className="w-full px-3 py-2 bg-slate-100 border border-slate-200 rounded-xl font-semibold text-slate-700 cursor-not-allowed"
+              />
+            </div>
+
+            <div>
+              <label className="block font-semibold text-slate-700 mb-1">Semester & Tahun</label>
+              <div className="flex gap-2">
+                <select
+                  value={semester}
+                  onChange={(e) => setSemester(e.target.value as any)}
+                  className="w-1/2 px-2.5 py-2 bg-slate-50 border border-slate-300 rounded-xl focus:ring-2 focus:ring-blue-600 focus:outline-none font-medium"
+                >
+                  <option value="1 (Ganjil)">1 (Ganjil)</option>
+                  <option value="2 (Genap)">2 (Genap)</option>
+                </select>
+                <input
+                  type="text"
+                  value={academicYear}
+                  onChange={(e) => setAcademicYear(e.target.value)}
+                  className="w-1/2 px-2.5 py-2 bg-slate-50 border border-slate-300 rounded-xl focus:ring-2 focus:ring-blue-600 focus:outline-none font-medium"
+                  placeholder="2026/2027"
+                />
+              </div>
+            </div>
+          </div>
+
+          {/* Row 2: Topic & Duration */}
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 text-xs">
+            <div className="sm:col-span-2">
+              <label className="block font-semibold text-slate-700 mb-1">
+                Topik / Materi Pembelajaran Pokok
+              </label>
+              <input
+                type="text"
+                required
+                value={topic}
+                onChange={(e) => setTopic(e.target.value)}
+                placeholder="contoh: Senam Lantai Guling Depan, Siklus Air, Pecahan Senilai, Dongeng Fabel"
+                className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl focus:ring-2 focus:ring-blue-600 focus:outline-none font-medium"
+              />
+            </div>
+            <div>
+              <label className="block font-semibold text-slate-700 mb-1">Alokasi Waktu</label>
+              <input
+                type="text"
+                value={duration}
+                onChange={(e) => setDuration(e.target.value)}
+                placeholder="3 JP (3 x 35 Menit)"
+                className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl focus:ring-2 focus:ring-blue-600 focus:outline-none font-medium"
+              />
+            </div>
+          </div>
+
+          {/* Row 3: Model & Deep Learning Principles */}
+          <div className="space-y-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs">
+              <div>
+                <label className="block font-semibold text-slate-700 mb-1">Model / Pendekatan</label>
+                <select
+                  value={learningModel}
+                  onChange={(e) => setLearningModel(e.target.value)}
+                  className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl focus:ring-2 focus:ring-blue-600 focus:outline-none font-medium"
+                >
+                  <option value="Problem-Based Learning terpadu Deep Learning">Problem-Based Learning (PBL) terpadu Deep Learning</option>
+                  <option value="Project-Based Learning (PjBL) Inovatif">Project-Based Learning (PjBL) Inovatif</option>
+                  <option value="Discovery / Inquiry Learning">Discovery / Inquiry Learning</option>
+                  <option value="Diferensiasi Konten, Proses & Produk">Pembelajaran Berdiferensiasi</option>
+                  <option value="Cooperative Learning Tipe STAD">Cooperative Learning</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="block font-semibold text-slate-700 mb-1">
+                  Catatan / Instruksi Khusus Tambahan (Opsional)
+                </label>
+                <input
+                  type="text"
+                  value={additionalPrompt}
+                  onChange={(e) => setAdditionalPrompt(e.target.value)}
+                  placeholder="contoh: Sertakan rubrik asesmen unjuk kerja & ice breaking bertema gerak tubuh"
+                  className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl focus:ring-2 focus:ring-blue-600 focus:outline-none text-xs"
+                />
+              </div>
+            </div>
+
+            {/* 3 Principles Checkboxes */}
+            <div className="p-3.5 bg-gradient-to-r from-blue-50 to-indigo-50/60 rounded-xl border border-blue-200">
+              <div className="text-xs font-bold text-blue-950 mb-2 flex items-center gap-2">
+                <Brain className="w-4 h-4 text-blue-700" />
+                <span>3 Prinsip Utama Pembelajaran Mendalam (Deep Learning):</span>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 text-xs">
+                <label className="flex items-center gap-2 bg-white p-2 rounded-lg border border-blue-100 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={includeMindful}
+                    onChange={(e) => setIncludeMindful(e.target.checked)}
+                    className="rounded text-blue-600 focus:ring-blue-500 w-4 h-4"
+                  />
+                  <div>
+                    <span className="font-bold text-slate-800">1. Berkesadaran (Mindful)</span>
+                    <p className="text-[10px] text-slate-500">Refleksi, pemahaman diri & fokus</p>
+                  </div>
+                </label>
+
+                <label className="flex items-center gap-2 bg-white p-2 rounded-lg border border-blue-100 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={includeMeaningful}
+                    onChange={(e) => setIncludeMeaningful(e.target.checked)}
+                    className="rounded text-blue-600 focus:ring-blue-500 w-4 h-4"
+                  />
+                  <div>
+                    <span className="font-bold text-slate-800">2. Bermakna (Meaningful)</span>
+                    <p className="text-[10px] text-slate-500">Relevan dengan kehidupan nyata</p>
+                  </div>
+                </label>
+
+                <label className="flex items-center gap-2 bg-white p-2 rounded-lg border border-blue-100 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={includeJoyful}
+                    onChange={(e) => setIncludeJoyful(e.target.checked)}
+                    className="rounded text-blue-600 focus:ring-blue-500 w-4 h-4"
+                  />
+                  <div>
+                    <span className="font-bold text-slate-800">3. Menggembirakan (Joyful)</span>
+                    <p className="text-[10px] text-slate-500">Menyenangkan, aktif & antusias</p>
+                  </div>
+                </label>
+              </div>
+            </div>
+          </div>
+
+          {/* Submit Button */}
+          <div className="pt-2">
+            <button
+              type="submit"
+              disabled={isGenerating}
+              className="w-full py-3.5 bg-gradient-to-r from-blue-700 via-indigo-700 to-blue-800 hover:from-blue-800 hover:to-indigo-900 text-white font-bold text-sm rounded-xl shadow-lg transition flex items-center justify-center gap-2.5 cursor-pointer disabled:opacity-50"
+            >
+              {isGenerating ? (
+                <>
+                  <RefreshCw className="w-5 h-5 animate-spin" />
+                  <span>Kecerdasan Buatan Sedang Menyusun Dokumen Administrasi SD...</span>
+                </>
+              ) : (
+                <>
+                  <Sparkles className="w-5 h-5 text-amber-300" />
+                  <span>GENERATE DOKUMEN {docType.replace('_', ' ')} DENGAN AI</span>
+                </>
+              )}
+            </button>
+          </div>
+        </form>
+      </div>
+
+      {/* Generated Result Section */}
+      <div id="generation-preview-anchor"></div>
+      {generatedHtml && (
+        <div className="bg-white rounded-2xl border border-slate-200 shadow-lg p-6 space-y-4">
+          {/* Action Header */}
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-4 border-b border-slate-100">
+            <div>
+              <div className="flex items-center gap-2">
+                <span className="px-2.5 py-0.5 rounded text-[11px] font-bold bg-emerald-100 text-emerald-800 flex items-center gap-1">
+                  <CheckCircle2 className="w-3.5 h-3.5" />
+                  <span>Berhasil Dihasilkan</span>
+                </span>
+                <span className="text-xs text-slate-500">
+                  {engineSource === 'cloud_ai' ? '🤖 Ditenagai Gemini AI Engine' : '⚡ Ditenagai Smart Deep Learning Engine'}
+                </span>
+              </div>
+              <h3 className="text-base font-bold text-slate-900 mt-1">{generatedTitle}</h3>
+            </div>
+
+            <div className="flex flex-wrap items-center gap-2">
+              <button
+                onClick={handleSaveToDocs}
+                className="px-3.5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-semibold text-xs rounded-xl shadow-sm transition flex items-center gap-1.5 cursor-pointer"
+              >
+                <Save className="w-4 h-4" />
+                <span>{savedSuccess ? 'Tersimpan!' : 'Simpan ke Arsip'}</span>
+              </button>
+
+              <button
+                onClick={handleDownloadDoc}
+                className="px-3.5 py-2 bg-blue-700 hover:bg-blue-800 text-white font-semibold text-xs rounded-xl shadow-sm transition flex items-center gap-1.5 cursor-pointer"
+              >
+                <FileDown className="w-4 h-4" />
+                <span>Download Word (.doc)</span>
+              </button>
+
+              <button
+                onClick={handlePrint}
+                className="px-3.5 py-2 bg-slate-800 hover:bg-slate-900 text-white font-semibold text-xs rounded-xl shadow-sm transition flex items-center gap-1.5 cursor-pointer"
+              >
+                <Printer className="w-4 h-4" />
+                <span>Cetak / PDF</span>
+              </button>
+            </div>
+          </div>
+
+          {savedSuccess && (
+            <div className="p-3 bg-emerald-50 border border-emerald-300 rounded-xl text-xs text-emerald-800 flex items-center gap-2">
+              <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+              <span>Dokumen berhasil disimpan ke arsip Ruang Kerja Anda!</span>
+            </div>
+          )}
+
+          {/* Paper View Container */}
+          <div className="bg-slate-200/70 p-4 sm:p-8 rounded-2xl flex justify-center overflow-x-auto">
+            <div className="bg-white shadow-xl rounded-sm border border-slate-300 w-full max-w-[850px] p-8 sm:p-12 text-slate-900 font-serif">
+              {/* Kop Surat Sekolah */}
+              <div className="border-b-4 border-double border-slate-900 pb-4 mb-6">
+                <div className="flex items-center gap-4">
+                  {user.schoolProfile.logoUrl ? (
+                    <img
+                      src={user.schoolProfile.logoUrl}
+                      alt="Logo Sekolah"
+                      className="w-20 h-20 object-contain shrink-0"
+                    />
+                  ) : (
+                    <div className="w-20 h-20 rounded-full border-2 border-slate-800 flex items-center justify-center font-bold text-xs text-slate-700 text-center p-1 shrink-0">
+                      LOGO SEKOLAH
+                    </div>
+                  )}
+                  <div className="text-center flex-1">
+                    <h4 className="text-xs font-bold uppercase tracking-wider text-slate-700">
+                      PEMERINTAH {(user.schoolProfile.province || 'JAWA TENGAH').toUpperCase()}
+                    </h4>
+                    <h4 className="text-xs font-bold uppercase tracking-wider text-slate-700">
+                      DINAS PENDIDIKAN DAN KEBUDAYAAN {(user.schoolProfile.regency || 'KABUPATEN').toUpperCase()}
+                    </h4>
+                    <h2 className="text-base sm:text-lg font-black uppercase text-slate-950 mt-0.5">
+                      {(user.schoolProfile.schoolName || user.schoolProfile.name || 'SD NEGERI').toUpperCase()}
+                    </h2>
+                    <p className="text-[10px] text-slate-600 mt-0.5">
+                      {user.schoolProfile.address}, Kec. {user.schoolProfile.district}, {user.schoolProfile.regency} | NPSN: {user.schoolProfile.npsn}
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Rendered Content */}
+              <div
+                className="prose max-w-none text-slate-900 leading-relaxed font-serif text-sm"
+                dangerouslySetInnerHTML={{ __html: generatedHtml }}
+              />
+
+              {/* Tanda Tangan */}
+              <div className="mt-12 pt-6 border-t border-slate-200 grid grid-cols-2 text-xs font-serif text-slate-900">
+                <div className="text-center">
+                  <p>Mengetahui,</p>
+                  <p className="font-semibold">Kepala {user.schoolProfile.schoolName}</p>
+                  <div className="h-16"></div>
+                  <p className="font-bold underline uppercase">{user.schoolProfile.headmaster?.name || 'Drs. H. Slamet Raharjo, M.Pd.'}</p>
+                  <p>NIP. {user.schoolProfile.headmaster?.nip || '19680512 199303 1 004'}</p>
+                </div>
+
+                <div className="text-center">
+                  <p>{user.schoolProfile.regency}, {new Date().toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })}</p>
+                  <p className="font-semibold">Guru Mata Pelajaran</p>
+                  <div className="h-16"></div>
+                  <p className="font-bold underline uppercase">{user.teacherProfile.fullName}</p>
+                  <p>NIP. {user.teacherProfile.nip}</p>
+                </div>
+              </div>
+
+              {/* Watermark branding */}
+              <div className="mt-8 pt-3 border-t border-slate-100 flex items-center justify-between text-[9px] text-slate-400">
+                <span>Dihasilkan dengan EDU PLAN AI – DEEP LEARNING</span>
+                <span>Developed by huseinapriyanto | 085725080078</span>
+              </div>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

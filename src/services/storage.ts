@@ -1,25 +1,32 @@
 /**
  * Storage and state manager for EDU PLAN AI
- * Handles user sessions, profile management, and saved documents
+ * Handles user sessions, profile management, saved documents, and students
  */
 import { UserAccount, SavedDocument, Student } from '../types';
 
 export const DEMO_USER: UserAccount = {
   id: 'demo-user-001',
-  name: 'Husein Apriyanto',
+  name: 'Husein Apriyanto, S.Pd.',
   email: 'husein.apriyanto@sekolah.id',
+  password: 'demo123Password',
   isDemo: true,
+  isVerified: true,
   createdAt: new Date().toISOString(),
+  lastLogin: new Date().toISOString(),
   teacherProfile: {
-    name: 'Husein Apriyanto',
+    name: 'Husein Apriyanto, S.Pd.',
+    fullName: 'Husein Apriyanto, S.Pd.',
     nip: '19900815 201802 1 001',
     email: 'husein.apriyanto@sekolah.id',
     position: 'Guru PJOK SD',
     rank: 'Penata Muda Tk. I / III-b',
+    rankGroup: 'Penata Muda Tk. I / III-b',
   },
   schoolProfile: {
     name: 'SDN Kasepuhan 04',
+    schoolName: 'SDN Kasepuhan 04',
     npsn: '20301928',
+    level: 'Sekolah Dasar (SD)',
     educationLevel: 'Sekolah Dasar (SD)',
     address: 'Jl. Raya Kasepuhan No. 04',
     village: 'Kasepuhan',
@@ -27,9 +34,17 @@ export const DEMO_USER: UserAccount = {
     regency: 'Kabupaten Batang',
     province: 'Jawa Tengah',
     schoolYear: '2026/2027',
+    academicYear: '2026/2027',
     principalName: 'Drs. H. Sugiyanto, M.Pd.',
     principalNip: '19750312 199903 1 002',
+    headmaster: {
+      name: 'Drs. H. Sugiyanto, M.Pd.',
+      nip: '19750312 199903 1 002',
+    },
     logoUrl: '',
+    activeSubject: 'PJOK',
+    activeGrade: '5',
+    activePhase: 'Fase C',
   },
 };
 
@@ -46,10 +61,14 @@ export const INITIAL_STUDENTS: Student[] = [
   { id: 'std-10', nisn: '0123456790', name: 'Indah Permatasari', gender: 'P', grade: '5' },
 ];
 
-const USERS_KEY = 'eduplan_users_v1';
-const CURRENT_USER_KEY = 'eduplan_current_user_v1';
-const DOCUMENTS_KEY = 'eduplan_documents_v1';
-const STUDENTS_KEY = 'eduplan_students_v1';
+const USERS_KEY = 'eduplan_users_v2';
+const CURRENT_USER_KEY = 'eduplan_current_user_v2';
+const DOCUMENTS_KEY = 'eduplan_documents_v2';
+const STUDENTS_KEY = 'eduplan_students_v2';
+
+export function getDemoUser(): UserAccount {
+  return DEMO_USER;
+}
 
 export function getActiveSession(): UserAccount | null {
   try {
@@ -57,7 +76,7 @@ export function getActiveSession(): UserAccount | null {
     if (raw) {
       const parsed = JSON.parse(raw);
       if (parsed && parsed.id) {
-        return parsed;
+        return normalizeUserAccount(parsed);
       }
     }
   } catch (e) {
@@ -74,21 +93,60 @@ export function getCurrentUser(): UserAccount {
   return DEMO_USER;
 }
 
+function normalizeUserAccount(user: any): UserAccount {
+  const tp = user.teacherProfile || {};
+  const sp = user.schoolProfile || {};
+
+  return {
+    ...user,
+    teacherProfile: {
+      ...tp,
+      fullName: tp.fullName || tp.name || user.name || 'Guru SD',
+      name: tp.name || tp.fullName || user.name || 'Guru SD',
+      rankGroup: tp.rankGroup || tp.rank || 'Penata Muda / III a',
+      rank: tp.rank || tp.rankGroup || 'Penata Muda / III a',
+      nip: tp.nip || '-',
+      email: tp.email || user.email || '',
+      position: tp.position || 'Guru Kelas / PJOK',
+    },
+    schoolProfile: {
+      ...sp,
+      schoolName: sp.schoolName || sp.name || 'SD Negeri',
+      name: sp.name || sp.schoolName || 'SD Negeri',
+      academicYear: sp.academicYear || sp.schoolYear || '2026/2027',
+      schoolYear: sp.schoolYear || sp.academicYear || '2026/2027',
+      activeSubject: sp.activeSubject || 'PJOK',
+      activeGrade: sp.activeGrade || '5',
+      activePhase: sp.activePhase || 'Fase C',
+      headmaster: sp.headmaster || {
+        name: sp.principalName || 'Kepala Sekolah',
+        nip: sp.principalNip || '-',
+      },
+    },
+  };
+}
+
 export function setCurrentUser(user: UserAccount): void {
-  localStorage.setItem(CURRENT_USER_KEY, JSON.stringify(user));
+  const normalized = normalizeUserAccount(user);
+  localStorage.setItem(CURRENT_USER_KEY, JSON.stringify(normalized));
+
   // Sync to users list, avoiding duplicates by id or by email
   const users = getAllUsers();
   const idx = users.findIndex(
     (u) =>
-      u.id === user.id ||
-      (!u.isDemo && !user.isDemo && u.email.trim().toLowerCase() === user.email.trim().toLowerCase())
+      u.id === normalized.id ||
+      (!u.isDemo && !normalized.isDemo && u.email.trim().toLowerCase() === normalized.email.trim().toLowerCase())
   );
   if (idx >= 0) {
-    users[idx] = { ...users[idx], ...user };
+    users[idx] = { ...users[idx], ...normalized };
   } else {
-    users.push(user);
+    users.push(normalized);
   }
   localStorage.setItem(USERS_KEY, JSON.stringify(users));
+}
+
+export function saveRegisteredUser(user: UserAccount): void {
+  setCurrentUser(user);
 }
 
 export function getAllUsers(): UserAccount[] {
@@ -97,7 +155,7 @@ export function getAllUsers(): UserAccount[] {
     if (raw) {
       const parsed = JSON.parse(raw);
       if (Array.isArray(parsed) && parsed.length > 0) {
-        return parsed;
+        return parsed.map(normalizeUserAccount);
       }
     }
   } catch (e) {
@@ -118,9 +176,12 @@ export function findUserByEmail(email: string): UserAccount | undefined {
   return users.find((u) => u.email.trim().toLowerCase() === cleanEmail);
 }
 
+export function clearCurrentUser(): void {
+  localStorage.removeItem(CURRENT_USER_KEY);
+}
 
 export function logoutUser(): void {
-  localStorage.removeItem(CURRENT_USER_KEY);
+  clearCurrentUser();
 }
 
 // User-scoped documents
@@ -129,7 +190,14 @@ export function getSavedDocuments(userId: string): SavedDocument[] {
     const raw = localStorage.getItem(DOCUMENTS_KEY);
     if (raw) {
       const all: SavedDocument[] = JSON.parse(raw);
-      return all.filter((d) => d.userId === userId);
+      return all
+        .filter((d) => d.userId === userId)
+        .map((d) => ({
+          ...d,
+          type: d.type || d.documentType || 'MODUL_AJAR',
+          documentType: d.documentType || d.type || 'MODUL_AJAR',
+          topic: d.topic || d.material || 'Pembelajaran',
+        }));
     }
   } catch (e) {
     console.error('Failed to load documents', e);
@@ -137,15 +205,25 @@ export function getSavedDocuments(userId: string): SavedDocument[] {
   return [];
 }
 
+export const getDocuments = getSavedDocuments;
+
 export function saveDocument(doc: SavedDocument): void {
   try {
     const raw = localStorage.getItem(DOCUMENTS_KEY);
     let all: SavedDocument[] = raw ? JSON.parse(raw) : [];
+    const normalized: SavedDocument = {
+      ...doc,
+      type: doc.type || doc.documentType || 'MODUL_AJAR',
+      documentType: doc.documentType || doc.type || 'MODUL_AJAR',
+      topic: doc.topic || doc.material || 'Materi',
+      updatedAt: new Date().toISOString(),
+    };
+
     const index = all.findIndex((d) => d.id === doc.id);
     if (index >= 0) {
-      all[index] = { ...doc, updatedAt: new Date().toISOString() };
+      all[index] = normalized;
     } else {
-      all.unshift(doc);
+      all.unshift(normalized);
     }
     localStorage.setItem(DOCUMENTS_KEY, JSON.stringify(all));
   } catch (e) {
@@ -171,12 +249,39 @@ export function getStudents(userId: string): Student[] {
   try {
     const raw = localStorage.getItem(`${STUDENTS_KEY}_${userId}`);
     if (raw) {
-      return JSON.parse(raw);
+      const list = JSON.parse(raw);
+      if (Array.isArray(list) && list.length > 0) return list;
     }
   } catch (e) {
     console.error('Failed to get students', e);
   }
   return INITIAL_STUDENTS;
+}
+
+export function saveStudent(student: Student): void {
+  const userId = student.userId || 'default_user';
+  const students = getStudents(userId);
+  const idx = students.findIndex((s) => s.id === student.id);
+  if (idx >= 0) {
+    students[idx] = student;
+  } else {
+    students.push(student);
+  }
+  saveStudents(userId, students);
+}
+
+export function deleteStudent(studentId: string): void {
+  const allKeys = Object.keys(localStorage).filter((k) => k.startsWith(STUDENTS_KEY));
+  allKeys.forEach((key) => {
+    try {
+      const raw = localStorage.getItem(key);
+      if (raw) {
+        let students: Student[] = JSON.parse(raw);
+        students = students.filter((s) => s.id !== studentId);
+        localStorage.setItem(key, JSON.stringify(students));
+      }
+    } catch (e) {}
+  });
 }
 
 export function saveStudents(userId: string, students: Student[]): void {
