@@ -8,6 +8,7 @@ import {
 import { generateCurriculumFallback } from '../services/curriculumGenerator';
 import { saveDocument } from '../services/storage';
 import { downloadWordDocument, printOrExportPdf } from '../utils/exportUtils';
+import { getRecommendedTopics, TopicItem } from '../constants/curriculumTopics';
 import {
   Sparkles,
   Wand2,
@@ -24,7 +25,10 @@ import {
   Compass,
   Smile,
   Brain,
-  Lightbulb
+  Lightbulb,
+  Check,
+  Loader2,
+  Sparkle
 } from 'lucide-react';
 
 interface DocumentGeneratorProps {
@@ -55,12 +59,26 @@ export const DocumentGenerator: React.FC<DocumentGeneratorProps> = ({
   const [docType, setDocType] = useState<DocumentType>(initialType);
 
   // Form parameters
-  const [subject, setSubject] = useState(user.schoolProfile.activeSubject || 'PJOK');
-  const [grade, setGrade] = useState(user.schoolProfile.activeGrade || '5');
+  const initialSubject = user.schoolProfile.activeSubject || 'PJOK';
+  const initialGrade = user.schoolProfile.activeGrade || '5';
+  const initialSemester: '1 (Ganjil)' | '2 (Genap)' = '1 (Ganjil)';
+
+  const [subject, setSubject] = useState(initialSubject);
+  const [grade, setGrade] = useState(initialGrade);
   const [phase, setPhase] = useState(user.schoolProfile.activePhase || 'Fase C');
-  const [semester, setSemester] = useState<'1 (Ganjil)' | '2 (Genap)'>('1 (Ganjil)');
+  const [semester, setSemester] = useState<'1 (Ganjil)' | '2 (Genap)'>(initialSemester);
   const [academicYear, setAcademicYear] = useState(user.schoolProfile.academicYear || '2026/2027');
-  const [topic, setTopic] = useState('Kombinasi Pola Gerak Dasar Lokomotor, Nonlokomotor, dan Manipulatif');
+
+  // Curated topics list according to subject, grade, and semester
+  const [suggestedTopics, setSuggestedTopics] = useState<TopicItem[]>(() =>
+    getRecommendedTopics(initialSubject, initialGrade, initialSemester)
+  );
+
+  const [topic, setTopic] = useState(() => {
+    const list = getRecommendedTopics(initialSubject, initialGrade, initialSemester);
+    return list[0]?.title || 'Aktivitas Kebugaran Jasmani dan Pola Hidup Sehat';
+  });
+
   const [duration, setDuration] = useState('3 JP (3 x 35 Menit)');
   const [learningModel, setLearningModel] = useState('Problem-Based Learning terpadu Deep Learning');
   const [additionalPrompt, setAdditionalPrompt] = useState('');
@@ -72,17 +90,95 @@ export const DocumentGenerator: React.FC<DocumentGeneratorProps> = ({
 
   // Generation status
   const [isGenerating, setIsGenerating] = useState(false);
+  const [isGeneratingTopics, setIsGeneratingTopics] = useState(false);
+  const [topicSuccessNotice, setTopicSuccessNotice] = useState<string | null>(null);
   const [generatedHtml, setGeneratedHtml] = useState<string | null>(null);
   const [generatedTitle, setGeneratedTitle] = useState('');
   const [engineSource, setEngineSource] = useState<'cloud_ai' | 'smart_fallback' | null>(null);
   const [savedSuccess, setSavedSuccess] = useState(false);
 
-  // Auto set phase based on grade
+  // Auto update topic when subject changes
+  const handleSubjectChange = (newSubject: string) => {
+    setSubject(newSubject);
+    const newTopics = getRecommendedTopics(newSubject, grade, semester);
+    setSuggestedTopics(newTopics);
+    if (newTopics.length > 0) {
+      setTopic(newTopics[0].title);
+      if (newTopics[0].duration) setDuration(newTopics[0].duration);
+      setTopicSuccessNotice(`Topik otomatis disesuaikan untuk ${newSubject} (Kelas ${grade})`);
+      setTimeout(() => setTopicSuccessNotice(null), 3500);
+    }
+  };
+
+  // Auto set phase and recommended topics based on grade
   const handleGradeChange = (g: string) => {
     setGrade(g);
-    if (g === '1' || g === '2') setPhase('Fase A');
-    else if (g === '3' || g === '4') setPhase('Fase B');
-    else setPhase('Fase C');
+    let newPhase = 'Fase C';
+    if (g === '1' || g === '2') newPhase = 'Fase A';
+    else if (g === '3' || g === '4') newPhase = 'Fase B';
+    setPhase(newPhase);
+
+    const newTopics = getRecommendedTopics(subject, g, semester);
+    setSuggestedTopics(newTopics);
+    if (newTopics.length > 0) {
+      setTopic(newTopics[0].title);
+      if (newTopics[0].duration) setDuration(newTopics[0].duration);
+    }
+  };
+
+  // Auto update topics when semester changes
+  const handleSemesterChange = (newSem: '1 (Ganjil)' | '2 (Genap)') => {
+    setSemester(newSem);
+    const newTopics = getRecommendedTopics(subject, grade, newSem);
+    setSuggestedTopics(newTopics);
+    if (newTopics.length > 0) {
+      setTopic(newTopics[0].title);
+      if (newTopics[0].duration) setDuration(newTopics[0].duration);
+    }
+  };
+
+  // AI-powered fresh topic generator
+  const handleAITopicGenerate = async () => {
+    setIsGeneratingTopics(true);
+    setTopicSuccessNotice(null);
+
+    try {
+      const response = await fetch('/api/suggest-topics', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          subject,
+          grade,
+          semester,
+        }),
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        if (data.topics && Array.isArray(data.topics) && data.topics.length > 0) {
+          setSuggestedTopics(data.topics);
+          setTopic(data.topics[0].title);
+          if (data.topics[0].duration) setDuration(data.topics[0].duration);
+          setTopicSuccessNotice(`✨ Rekomendasi AI berhasil dibuat untuk ${subject} Kelas ${grade}!`);
+          setTimeout(() => setTopicSuccessNotice(null), 4000);
+          setIsGeneratingTopics(false);
+          return;
+        }
+      }
+    } catch (e) {
+      console.log('Using local curriculum matrix fallback');
+    }
+
+    // Client-side fallback if server not reachable or static deploy
+    const localTopics = getRecommendedTopics(subject, grade, semester);
+    setSuggestedTopics(localTopics);
+    if (localTopics.length > 0) {
+      setTopic(localTopics[0].title);
+      if (localTopics[0].duration) setDuration(localTopics[0].duration);
+      setTopicSuccessNotice(`Topik diperbarui sesuai silabus Kurikulum Merdeka ${subject}`);
+      setTimeout(() => setTopicSuccessNotice(null), 3500);
+    }
+    setIsGeneratingTopics(false);
   };
 
   const handleGenerate = async (e: React.FormEvent) => {
@@ -118,6 +214,14 @@ export const DocumentGenerator: React.FC<DocumentGeneratorProps> = ({
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           params,
+          documentType: docType,
+          subject,
+          grade,
+          phase,
+          semester,
+          schoolYear: academicYear,
+          material: topic,
+          additionalInstructions: additionalPrompt,
           schoolProfile: user.schoolProfile,
           teacherProfile: user.teacherProfile,
         }),
@@ -125,8 +229,9 @@ export const DocumentGenerator: React.FC<DocumentGeneratorProps> = ({
 
       if (response.ok) {
         const data = await response.json();
-        if (data.html && data.html.length > 50) {
-          resultHtml = data.html;
+        const html = data.html || data.content;
+        if (html && html.length > 50) {
+          resultHtml = html;
           usedSource = 'cloud_ai';
         }
       }
@@ -261,7 +366,7 @@ export const DocumentGenerator: React.FC<DocumentGeneratorProps> = ({
               <label className="block font-semibold text-slate-700 mb-1">Mata Pelajaran (SD)</label>
               <select
                 value={subject}
-                onChange={(e) => setSubject(e.target.value)}
+                onChange={(e) => handleSubjectChange(e.target.value)}
                 className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl focus:ring-2 focus:ring-blue-600 focus:outline-none font-medium"
               >
                 <option value="PJOK">1. PJOK</option>
@@ -308,7 +413,7 @@ export const DocumentGenerator: React.FC<DocumentGeneratorProps> = ({
               <div className="flex gap-2">
                 <select
                   value={semester}
-                  onChange={(e) => setSemester(e.target.value as any)}
+                  onChange={(e) => handleSemesterChange(e.target.value as any)}
                   className="w-1/2 px-2.5 py-2 bg-slate-50 border border-slate-300 rounded-xl focus:ring-2 focus:ring-blue-600 focus:outline-none font-medium"
                 >
                   <option value="1 (Ganjil)">1 (Ganjil)</option>
@@ -325,30 +430,115 @@ export const DocumentGenerator: React.FC<DocumentGeneratorProps> = ({
             </div>
           </div>
 
-          {/* Row 2: Topic & Duration */}
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 text-xs">
-            <div className="sm:col-span-2">
-              <label className="block font-semibold text-slate-700 mb-1">
-                Topik / Materi Pembelajaran Pokok
-              </label>
-              <input
-                type="text"
-                required
-                value={topic}
-                onChange={(e) => setTopic(e.target.value)}
-                placeholder="contoh: Senam Lantai Guling Depan, Siklus Air, Pecahan Senilai, Dongeng Fabel"
-                className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl focus:ring-2 focus:ring-blue-600 focus:outline-none font-medium"
-              />
+          {/* Row 2: Topic & Duration with AI Recommender */}
+          <div className="space-y-3">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 text-xs">
+              <div className="sm:col-span-2">
+                <div className="flex items-center justify-between mb-1.5">
+                  <label className="font-semibold text-slate-700 flex items-center gap-1.5">
+                    <BookOpen className="w-4 h-4 text-blue-700" />
+                    <span>Topik / Materi Pembelajaran Pokok</span>
+                  </label>
+                  
+                  {/* AI Topic Generation Trigger */}
+                  <button
+                    type="button"
+                    onClick={handleAITopicGenerate}
+                    disabled={isGeneratingTopics}
+                    className="inline-flex items-center gap-1.5 px-2.5 py-1 text-[11px] font-bold text-blue-700 bg-blue-50 hover:bg-blue-100 rounded-lg border border-blue-200 transition cursor-pointer disabled:opacity-50 shadow-2xs"
+                    title="Minta AI menghasilkan rekomendasi materi pembelajaran spesifik"
+                  >
+                    {isGeneratingTopics ? (
+                      <>
+                        <Loader2 className="w-3.5 h-3.5 animate-spin text-blue-700" />
+                        <span>Merumuskan Topik AI...</span>
+                      </>
+                    ) : (
+                      <>
+                        <Sparkles className="w-3.5 h-3.5 text-amber-500" />
+                        <span>Saran AI Topik</span>
+                      </>
+                    )}
+                  </button>
+                </div>
+
+                <div className="relative">
+                  <input
+                    type="text"
+                    required
+                    value={topic}
+                    onChange={(e) => setTopic(e.target.value)}
+                    placeholder={`contoh: ${suggestedTopics[0]?.title || 'Aktivitas Kebugaran Jasmani dan Pola Hidup Sehat'}`}
+                    className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-300 rounded-xl focus:ring-2 focus:ring-blue-600 focus:outline-none font-medium text-xs text-slate-900 shadow-2xs"
+                  />
+                </div>
+
+                {topicSuccessNotice && (
+                  <div className="flex items-center gap-1.5 mt-1.5 text-[11px] text-emerald-700 font-medium bg-emerald-50 px-2.5 py-1 rounded-lg border border-emerald-200 animate-fadeIn">
+                    <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                    <span>{topicSuccessNotice}</span>
+                  </div>
+                )}
+              </div>
+
+              <div>
+                <label className="block font-semibold text-slate-700 mb-1.5">Alokasi Waktu</label>
+                <input
+                  type="text"
+                  value={duration}
+                  onChange={(e) => setDuration(e.target.value)}
+                  placeholder="3 JP (3 x 35 Menit)"
+                  className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-300 rounded-xl focus:ring-2 focus:ring-blue-600 focus:outline-none font-medium text-xs shadow-2xs"
+                />
+                <span className="block text-[10px] text-slate-400 mt-1">Standar SD: 2-5 JP per pertemuan</span>
+              </div>
             </div>
-            <div>
-              <label className="block font-semibold text-slate-700 mb-1">Alokasi Waktu</label>
-              <input
-                type="text"
-                value={duration}
-                onChange={(e) => setDuration(e.target.value)}
-                placeholder="3 JP (3 x 35 Menit)"
-                className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl focus:ring-2 focus:ring-blue-600 focus:outline-none font-medium"
-              />
+
+            {/* Interactive Topic Quick-Picks aligned with Selected Subject */}
+            <div className="bg-slate-50/90 p-3.5 rounded-xl border border-slate-200 text-xs space-y-2">
+              <div className="flex items-center justify-between">
+                <span className="text-[11px] font-bold text-slate-700 flex items-center gap-1.5">
+                  <Lightbulb className="w-3.5 h-3.5 text-amber-500" />
+                  <span>Rekomendasi Topik {subject} (Kelas {grade} {semester})</span>
+                </span>
+                <span className="text-[10px] text-slate-500">Klik salah satu untuk langsung memilih</span>
+              </div>
+
+              <div className="flex flex-wrap gap-2">
+                {suggestedTopics.map((item, idx) => {
+                  const isSelected = topic.trim().toLowerCase() === item.title.trim().toLowerCase();
+                  return (
+                    <button
+                      key={item.id || idx}
+                      type="button"
+                      onClick={() => {
+                        setTopic(item.title);
+                        if (item.duration) setDuration(item.duration);
+                      }}
+                      className={`text-left text-[11px] px-3 py-1.5 rounded-lg border transition cursor-pointer flex items-center gap-2 ${
+                        isSelected
+                          ? 'bg-blue-700 text-white border-blue-700 font-semibold shadow-xs'
+                          : 'bg-white text-slate-700 border-slate-200 hover:border-blue-300 hover:bg-blue-50/60'
+                      }`}
+                    >
+                      {isSelected ? (
+                        <Check className="w-3.5 h-3.5 text-amber-300 shrink-0" />
+                      ) : (
+                        <span className={`text-[9px] px-1.5 py-0.5 rounded font-bold uppercase ${
+                          item.tag === 'Mindful'
+                            ? 'bg-purple-100 text-purple-700'
+                            : item.tag === 'Joyful'
+                            ? 'bg-amber-100 text-amber-700'
+                            : 'bg-emerald-100 text-emerald-700'
+                        }`}>
+                          {item.tag || 'Materi'}
+                        </span>
+                      )}
+                      <span className="line-clamp-1 max-w-[260px] sm:max-w-[420px]">{item.title}</span>
+                    </button>
+                  );
+                })}
+              </div>
             </div>
           </div>
 

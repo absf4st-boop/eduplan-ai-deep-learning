@@ -41,26 +41,22 @@ export function generateCurriculumFallback(
   const schoolYear = params.academicYear || params.schoolYear || '2026/2027';
   const material = params.topic || params.material || 'Aktivitas Kebugaran Jasmani dan Pola Hidup Sehat';
 
-  const teacher = teacherProfile || params.teacher || {
-    name: 'Husein Apriyanto',
-    fullName: 'Husein Apriyanto',
-    nip: '19900815 201802 1 001',
-  };
+  const teacher = teacherProfile || params.teacher || {};
+  const teacherName = teacher.fullName || teacher.name || 'Husein Apriyanto';
+  const teacherNip = teacher.nip || '19900815 201802 1 001';
 
-  const school = schoolProfile || params.school || {
-    name: 'SDN Kasepuhan 04',
-    schoolName: 'SDN Kasepuhan 04',
-    principalName: 'Drs. H. Sugiyanto, M.Pd.',
-    principalNip: '19750312 199903 1 002',
-    address: 'Jl. Raya Kasepuhan No. 4, Jawa Tengah',
-    npsn: '20301928',
-  };
+  const school = schoolProfile || params.school || {};
+  const schoolName = school.schoolName || school.name || 'SDN Kasepuhan 04';
+  const principalName = school.principalName || school.headmaster?.name || 'Drs. H. Sugiyanto, M.Pd.';
+  const principalNip = school.principalNip || school.headmaster?.nip || '19750312 199903 1 002';
+  const schoolAddress = school.address || 'Jl. Raya Kasepuhan No. 4, Jawa Tengah';
+  const schoolNpsn = school.npsn || '20301928';
 
   const headerHtml = `
   <div style="border-bottom: 3px double #1e3a8a; padding-bottom: 12px; margin-bottom: 20px; text-align: center; font-family: 'Times New Roman', Times, serif;">
     <div style="font-size: 16pt; font-weight: bold; color: #1e3a8a; text-transform: uppercase;">PEMERINTAH KABUPATEN / DINAS PENDIDIKAN</div>
-    <div style="font-size: 18pt; font-weight: bold; color: #0f172a; text-transform: uppercase;">${school.name}</div>
-    <div style="font-size: 10pt; color: #475569; margin-top: 4px;">Alamat: ${school.address} | NPSN: ${school.npsn || '20301928'}</div>
+    <div style="font-size: 18pt; font-weight: bold; color: #0f172a; text-transform: uppercase;">${schoolName}</div>
+    <div style="font-size: 10pt; color: #475569; margin-top: 4px;">Alamat: ${schoolAddress} | NPSN: ${schoolNpsn}</div>
     <div style="font-size: 9pt; color: #64748b; font-style: italic; margin-top: 2px;">Tahun Pelajaran: ${schoolYear}</div>
   </div>
   `;
@@ -71,17 +67,17 @@ export function generateCurriculumFallback(
       <tr>
         <td style="width: 50%; text-align: center; border: none; vertical-align: top;">
           <p style="margin: 0;">Mengetahui,</p>
-          <p style="margin: 0; font-weight: bold;">Kepala ${school.name}</p>
+          <p style="margin: 0; font-weight: bold;">Kepala ${schoolName}</p>
           <div style="height: 70px;"></div>
-          <p style="margin: 0; font-weight: bold; text-decoration: underline;">${school.principalName}</p>
-          <p style="margin: 0; font-size: 10pt;">NIP. ${school.principalNip}</p>
+          <p style="margin: 0; font-weight: bold; text-decoration: underline;">${principalName}</p>
+          <p style="margin: 0; font-size: 10pt;">NIP. ${principalNip}</p>
         </td>
         <td style="width: 50%; text-align: center; border: none; vertical-align: top;">
           <p style="margin: 0;">Kasepuhan, ........................ ${schoolYear.split('/')[0]}</p>
           <p style="margin: 0; font-weight: bold;">Guru Mata Pelajaran ${subject}</p>
           <div style="height: 70px;"></div>
-          <p style="margin: 0; font-weight: bold; text-decoration: underline;">${teacher.name}</p>
-          <p style="margin: 0; font-size: 10pt;">NIP. ${teacher.nip}</p>
+          <p style="margin: 0; font-weight: bold; text-decoration: underline;">${teacherName}</p>
+          <p style="margin: 0; font-size: 10pt;">NIP. ${teacherNip}</p>
         </td>
       </tr>
     </table>

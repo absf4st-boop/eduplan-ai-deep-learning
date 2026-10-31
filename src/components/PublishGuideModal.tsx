@@ -98,15 +98,53 @@ git push -u origin main`}</pre>
           <div className="space-y-3">
             <div className="flex items-center gap-2.5 font-bold text-slate-900">
               <span className="w-6 h-6 rounded-full bg-blue-600 text-white flex items-center justify-center text-xs">3</span>
-              <span>Menambahkan GEMINI_API_KEY (Opsional tapi Direkomendasikan)</span>
+              <span>Menambahkan GEMINI_API_KEY (AI Administrasi Otomatis)</span>
             </div>
             <div className="pl-8 space-y-2 text-xs text-slate-600">
-              <p>Agar Netlify Function menggunakan server-side Gemini AI asli:</p>
-              <p>Di dashboard Netlify Anda, masuk ke <strong>Site Configuration</strong> &gt; <strong>Environment variables</strong> &gt; <strong>Add a variable</strong>:</p>
+              <p>Agar server menggunakan AI Gemini resmi dari Google:</p>
               <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 text-slate-800 space-y-1">
                 <div><strong>Key:</strong> <code>GEMINI_API_KEY</code></div>
                 <div><strong>Value:</strong> Masukkan kunci API Gemini Anda dari Google AI Studio.</div>
               </div>
+            </div>
+          </div>
+
+          {/* Step 4: Brevo Email OTP Setup */}
+          <div className="space-y-3">
+            <div className="flex items-center gap-2.5 font-bold text-slate-900">
+              <span className="w-6 h-6 rounded-full bg-indigo-600 text-white flex items-center justify-center text-xs">4</span>
+              <span>Konfigurasi Brevo untuk Kirim OTP Asli ke Gmail Pengguna</span>
+            </div>
+            <div className="pl-8 space-y-2.5 text-xs text-slate-600">
+              <p>
+                Agar sistem mengirimkan email OTP 6-digit asli dengan template resmi berjudul <em>"Kode Verifikasi Akun EDU PLAN AI"</em>:
+              </p>
+              <ol className="list-decimal pl-4 space-y-1">
+                <li>Buka <a href="https://app.brevo.com" target="_blank" rel="noopener noreferrer" className="text-blue-600 underline font-semibold">app.brevo.com</a> &gt; Menu profil (kanan atas) &gt; <strong>SMTP & API</strong> &gt; <strong>API Keys</strong> &gt; <strong>Generate a new API key</strong>.</li>
+                <li>Daftarkan dan verifikasi email pengirim Anda di Brevo pada menu <strong>Senders & IP</strong> &gt; <strong>Senders</strong> &gt; <strong>Add a sender</strong>.</li>
+                <li>Tambahkan variabel lingkungan di server / hosting Anda (Environment variables):</li>
+              </ol>
+
+              <div className="bg-blue-50/80 border border-blue-200 rounded-xl p-3.5 text-slate-800 space-y-2 font-mono text-xs">
+                <div className="flex items-center justify-between pb-1 border-b border-blue-200/60 font-sans font-bold text-blue-950">
+                  <span>Variabel Lingkungan Brevo:</span>
+                </div>
+                <div>
+                  <span className="text-blue-700 font-bold">BREVO_API_KEY=</span>
+                  <span className="text-slate-600">xkeysib-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx</span>
+                </div>
+                <div>
+                  <span className="text-blue-700 font-bold">BREVO_SENDER_EMAIL=</span>
+                  <span className="text-slate-600">email-terverifikasi-anda@gmail.com</span>
+                </div>
+                <div>
+                  <span className="text-blue-700 font-bold">BREVO_SENDER_NAME=</span>
+                  <span className="text-slate-600">EDU PLAN AI</span>
+                </div>
+              </div>
+              <p className="text-[11px] text-slate-500">
+                Kunci disimpan aman di sisi server (backend) dan tidak pernah terekspos ke frontend.
+              </p>
             </div>
           </div>
 

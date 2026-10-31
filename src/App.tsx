@@ -12,6 +12,7 @@ import { DashboardView } from './components/DashboardView';
 import { AuthModal } from './components/AuthModal';
 import { PublishGuideModal } from './components/PublishGuideModal';
 import { WhatsAppButton } from './components/WhatsAppButton';
+import './services/firebase';
 
 export default function App() {
   const [currentUser, setCurrentUserState] = useState<UserAccount | null>(null);

@@ -32,6 +32,16 @@ if (apiKey) {
 // Curriculum reference helper & fallback generator
 import { generateCurriculumFallback } from './src/services/curriculumGenerator.ts';
 
+import { getRecommendedTopics } from './src/constants/curriculumTopics.ts';
+import {
+  generateSixDigitOtp,
+  storeOtp,
+  verifyOtpCode,
+  sendOtpViaBrevo,
+  OTP_EXPIRATION_MS,
+  getStoredOtp
+} from './src/services/brevoMailer.ts';
+
 app.get('/api/status', (req, res) => {
   res.json({
     status: 'ok',
@@ -42,20 +52,193 @@ app.get('/api/status', (req, res) => {
   });
 });
 
+// ==========================================
+// BREVO OTP TRANSACTIONAL EMAIL ENDPOINTS
+// ==========================================
+
+// Check OTP & Brevo Configuration status
+app.get('/api/otp/status', (req, res) => {
+  const brevoApiKey = process.env.BREVO_API_KEY || '';
+  const brevoSender = process.env.BREVO_SENDER_EMAIL || 'admin@eduplanai.com';
+  res.json({
+    brevoConfigured: Boolean(brevoApiKey),
+    senderEmail: brevoSender,
+    expiresInSeconds: OTP_EXPIRATION_MS / 1000,
+  });
+});
+
+// Send 6-digit OTP to user's real email via Brevo
+app.post('/api/otp/send', async (req, res) => {
+  try {
+    const { email, name = 'Bapak/Ibu Guru', purpose = 'Pendaftaran Akun' } = req.body || {};
+
+    if (!email || typeof email !== 'string' || !email.includes('@')) {
+      return res.status(400).json({
+        success: false,
+        message: 'Format email tidak valid. Masukkan alamat email aktif Anda.',
+      });
+    }
+
+    const cleanEmail = email.trim().toLowerCase();
+
+    // Check rate limit / cooldown: do not allow spamming within 25 seconds
+    const existing = getStoredOtp(cleanEmail);
+    if (existing && !existing.used && (Date.now() - existing.createdAt < 25 * 1000)) {
+      const waitSeconds = Math.ceil((25 * 1000 - (Date.now() - existing.createdAt)) / 1000);
+      return res.status(429).json({
+        success: false,
+        message: `Harap tunggu ${waitSeconds} detik sebelum meminta pengiriman ulang kode OTP.`,
+      });
+    }
+
+    // Generate new 6-digit OTP and store with 5-minute expiry
+    const otpCode = generateSixDigitOtp();
+    storeOtp(cleanEmail, otpCode);
+
+    // Send real transactional email via Brevo
+    const brevoResult = await sendOtpViaBrevo({
+      recipientEmail: cleanEmail,
+      recipientName: name,
+      otpCode,
+      purpose,
+    });
+
+    if (brevoResult.success) {
+      return res.json({
+        success: true,
+        brevoSent: true,
+        message: `Kode verifikasi OTP 6-digit telah dikirimkan ke ${cleanEmail} via Brevo. Silakan periksa Kotak Masuk atau folder Spam Gmail Anda.`,
+        expiresInSeconds: 300,
+      });
+    } else {
+      // If Brevo is not configured or returned an error, return informative status
+      console.warn(`[OTP] Brevo send note for ${cleanEmail}: ${brevoResult.message}`);
+      return res.json({
+        success: true,
+        brevoSent: false,
+        brevoConfigured: brevoResult.brevoConfigured,
+        notice: brevoResult.message,
+        message: brevoResult.brevoConfigured
+          ? `Pengiriman Brevo terkendala: ${brevoResult.message}`
+          : 'BREVO_API_KEY belum diisi di server. Kode verifikasi ditampilkan sementara untuk pengetesan.',
+        // For development fallback when API key is not configured yet
+        devCode: !brevoResult.brevoConfigured ? otpCode : undefined,
+        expiresInSeconds: 300,
+      });
+    }
+  } catch (error: any) {
+    console.error('Error in /api/otp/send:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Gagal memproses pengiriman OTP: ' + (error.message || error),
+    });
+  }
+});
+
+// Verify 6-digit OTP (single-use, 5 minutes validity)
+app.post('/api/otp/verify', (req, res) => {
+  try {
+    const { email, otp } = req.body || {};
+
+    if (!email || !otp) {
+      return res.status(400).json({
+        success: false,
+        message: 'Email dan kode OTP wajib diisi.',
+      });
+    }
+
+    const verification = verifyOtpCode(email, otp);
+    if (verification.success) {
+      return res.json({
+        success: true,
+        message: verification.message,
+      });
+    } else {
+      return res.status(400).json({
+        success: false,
+        message: verification.message,
+      });
+    }
+  } catch (error: any) {
+    console.error('Error in /api/otp/verify:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Gagal memverifikasi OTP: ' + (error.message || error),
+    });
+  }
+});
+
+// Endpoint to generate or suggest tailored curriculum topics for any subject
+app.post('/api/suggest-topics', async (req, res) => {
+  const { subject = 'PJOK', grade = '5', semester = '1 (Ganjil)' } = req.body;
+
+  if (ai) {
+    try {
+      const prompt = `Bertindaklah sebagai pakar Kurikulum Merdeka Sekolah Dasar (SD) Indonesia dengan pendekatan Pembelajaran Mendalam (Deep Learning).
+Berikan 4 sampai 5 rekomendasi topik atau materi pembelajaran pokok spesifik, resmi, dan kontekstual untuk:
+- Mata Pelajaran: ${subject}
+- Kelas: ${grade} SD
+- Semester: ${semester}
+
+Format keluaran HARUS murni JSON array tanpa markdown/fences:
+[
+  {
+    "id": "topik-1",
+    "title": "Judul materi pokok yang jelas dan menarik untuk SD",
+    "description": "Deskripsi capaian dan aktivitas utama",
+    "tag": "Mindful"
+  }
+]
+Tag hanya bernilai salah satu dari: "Mindful", "Meaningful", "Joyful".`;
+
+      const response = await ai.models.generateContent({
+        model: 'gemini-2.5-flash',
+        contents: prompt,
+        config: {
+          responseMimeType: 'application/json',
+        },
+      });
+
+      const responseText = response.text || '';
+      if (responseText.trim()) {
+        const parsed = JSON.parse(responseText.trim());
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          return res.json({
+            success: true,
+            topics: parsed,
+            source: 'gemini-ai',
+          });
+        }
+      }
+    } catch (err: any) {
+      console.warn('AI topic generation fallback to local matrix:', err?.message || err);
+    }
+  }
+
+  // Local authentic Kurikulum Merdeka fallback
+  const localTopics = getRecommendedTopics(subject, grade, semester);
+  return res.json({
+    success: true,
+    topics: localTopics,
+    source: 'curriculum-matrix',
+  });
+});
+
 app.post('/api/generate', async (req, res) => {
-  const {
-    documentType,
-    subject,
-    grade,
-    phase,
-    semester,
-    schoolYear,
-    material,
-    additionalInstructions,
-    teacher,
-    school,
-    contextDocuments,
-  } = req.body;
+  const body = req.body || {};
+  const params = body.params || body;
+  const teacher = body.teacherProfile || body.teacher || { name: 'Husein Apriyanto', nip: '19900815 201802 1 001' };
+  const school = body.schoolProfile || body.school || { name: 'SDN Kasepuhan 04', principalName: 'Drs. H. Sugiyanto, M.Pd.', principalNip: '19750312 199903 1 002', address: 'Jl. Raya Kasepuhan No. 4, Jawa Tengah' };
+
+  const documentType = params.documentType || params.type || 'MODUL_AJAR';
+  const subject = params.subject || 'PJOK';
+  const grade = params.grade || '5';
+  const phase = params.phase || 'Fase C';
+  const semester = params.semester || '1 (Ganjil)';
+  const schoolYear = params.schoolYear || params.academicYear || '2026/2027';
+  const material = params.material || params.topic || 'Kombinasi Pola Gerak Dasar Lokomotor, Nonlokomotor, dan Manipulatif';
+  const additionalInstructions = params.additionalInstructions || params.additionalPrompt || '';
+  const contextDocuments = body.contextDocuments || {};
 
   const docTypeNames: Record<string, string> = {
     CP: 'Capaian Pembelajaran (CP)',
@@ -67,8 +250,11 @@ app.post('/api/generate', async (req, res) => {
     PROMES: 'Program Semester (PROMES)',
     LKPD: 'Lembar Kerja Peserta Didik (LKPD)',
     JURNAL: 'Jurnal Harian Guru Pembelajaran Mendalam',
+    JURNAL_HARIAN: 'Jurnal Harian Guru Pembelajaran Mendalam',
     HADIR: 'Daftar Hadir Siswa',
+    DAFTAR_HADIR: 'Daftar Hadir Siswa',
     NILAI: 'Daftar Nilai Asesmen Pembelajaran Mendalam',
+    DAFTAR_NILAI: 'Daftar Nilai Asesmen Pembelajaran Mendalam',
   };
 
   const documentName = docTypeNames[documentType] || documentType;
@@ -123,7 +309,7 @@ Pastikan dokumen memuat:
   try {
     if (ai) {
       const response = await ai.models.generateContent({
-        model: 'gemini-3.8-flash',
+        model: 'gemini-2.5-flash',
         contents: userPrompt,
         config: {
           systemInstruction: systemPrompt,
@@ -144,6 +330,7 @@ Pastikan dokumen memuat:
           success: true,
           source: 'gemini-ai',
           content: cleanHtml,
+          html: cleanHtml,
         });
       }
     }
@@ -166,6 +353,7 @@ Pastikan dokumen memuat:
       success: true,
       source: 'curriculum-engine',
       content: fallbackHtml,
+      html: fallbackHtml,
     });
   } catch (error: any) {
     console.error('AI Generation error:', error);
@@ -187,6 +375,7 @@ Pastikan dokumen memuat:
       success: true,
       source: 'curriculum-engine-fallback',
       content: fallbackHtml,
+      html: fallbackHtml,
       notice: error?.message || 'Generated via EDU PLAN AI Curriculum Engine',
     });
   }

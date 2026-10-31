@@ -175,7 +175,7 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({
             }`}
           >
             <Award className="w-4 h-4" />
-            <span>Kepala Sekolah & Kelas</span>
+            <span>Kepala Sekolah</span>
           </button>
         </div>
 
@@ -373,23 +373,24 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({
               </div>
             )}
 
-            {/* TAB KEPSEK & DEFAULT KELAS */}
+            {/* TAB KEPSEK: HANYA NAMA KEPALA SEKOLAH & NIP KEPALA SEKOLAH */}
             {activeTab === 'kepsek' && (
               <div className="space-y-4">
-                <div className="bg-blue-50/60 p-3.5 rounded-xl border border-blue-200/80 space-y-3">
-                  <h4 className="font-bold text-blue-950 text-xs flex items-center gap-1.5">
-                    <Award className="w-4 h-4 text-amber-600" />
-                    <span>Identitas Kepala Sekolah (Penanda Tangan)</span>
-                  </h4>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div className="bg-blue-50/70 p-4 rounded-xl border border-blue-200/90 space-y-3.5 shadow-2xs">
+                  <div className="flex items-center gap-2 text-blue-950 font-bold text-xs pb-1 border-b border-blue-200/60">
+                    <Award className="w-4 h-4 text-amber-600 shrink-0" />
+                    <span>Identitas Kepala Sekolah (Penanda Tangan Dokumen)</span>
+                  </div>
+                  
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5 pt-1">
                     <div>
                       <label className="block font-semibold text-slate-700 mb-1">Nama Kepala Sekolah</label>
                       <input
                         type="text"
                         value={headmasterName}
                         onChange={(e) => setHeadmasterName(e.target.value)}
-                        className="w-full px-3 py-2 bg-white border border-slate-300 rounded-xl focus:ring-2 focus:ring-blue-600 focus:outline-none"
-                        placeholder="Nama dan gelar"
+                        className="w-full px-3 py-2 bg-white border border-slate-300 rounded-xl focus:ring-2 focus:ring-blue-600 focus:outline-none text-xs text-slate-900 shadow-2xs"
+                        placeholder="Nama dan gelar (contoh: Drs. H. Slamet Raharjo, M.Pd.)"
                       />
                     </div>
                     <div>
@@ -398,63 +399,15 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({
                         type="text"
                         value={headmasterNip}
                         onChange={(e) => setHeadmasterNip(e.target.value)}
-                        className="w-full px-3 py-2 bg-white border border-slate-300 rounded-xl focus:ring-2 focus:ring-blue-600 focus:outline-none"
-                        placeholder="NIP Kepala Sekolah"
+                        className="w-full px-3 py-2 bg-white border border-slate-300 rounded-xl focus:ring-2 focus:ring-blue-600 focus:outline-none text-xs text-slate-900 shadow-2xs"
+                        placeholder="19680512 199303 1 004 (atau tanda -)"
                       />
                     </div>
                   </div>
-                </div>
 
-                <div className="space-y-3">
-                  <h4 className="font-bold text-slate-800 text-xs">Pengaturan Default Pembelajaran Anda</h4>
-                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                    <div>
-                      <label className="block font-semibold text-slate-700 mb-1">Mata Pelajaran Aktif</label>
-                      <select
-                        value={activeSubject}
-                        onChange={(e) => setActiveSubject(e.target.value)}
-                        className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl focus:ring-2 focus:ring-blue-600 focus:outline-none font-medium"
-                      >
-                        <option value="PJOK">PJOK</option>
-                        <option value="PAI dan Budi Pekerti">PAI dan Budi Pekerti</option>
-                        <option value="MATEMATIKA">MATEMATIKA</option>
-                        <option value="BAHASA JAWA">BAHASA JAWA</option>
-                        <option value="BAHASA INDONESIA">BAHASA INDONESIA</option>
-                        <option value="IPAS">IPAS</option>
-                        <option value="SENI MUSIK">SENI MUSIK</option>
-                        <option value="SENI TARI">SENI TARI</option>
-                        <option value="BAHASA INGGRIS">BAHASA INGGRIS</option>
-                        <option value="PENDIDIKAN PANCASILA">PENDIDIKAN PANCASILA</option>
-                      </select>
-                    </div>
-
-                    <div>
-                      <label className="block font-semibold text-slate-700 mb-1">Kelas Aktif</label>
-                      <select
-                        value={activeGrade}
-                        onChange={(e) => handleGradeChange(e.target.value)}
-                        className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl focus:ring-2 focus:ring-blue-600 focus:outline-none font-medium"
-                      >
-                        <option value="1">Kelas 1 (Fase A)</option>
-                        <option value="2">Kelas 2 (Fase A)</option>
-                        <option value="3">Kelas 3 (Fase B)</option>
-                        <option value="4">Kelas 4 (Fase B)</option>
-                        <option value="5">Kelas 5 (Fase C)</option>
-                        <option value="6">Kelas 6 (Fase C)</option>
-                      </select>
-                    </div>
-
-                    <div>
-                      <label className="block font-semibold text-slate-700 mb-1">Tahun Pelajaran</label>
-                      <input
-                        type="text"
-                        value={academicYear}
-                        onChange={(e) => setAcademicYear(e.target.value)}
-                        className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl focus:ring-2 focus:ring-blue-600 focus:outline-none"
-                        placeholder="2026/2027"
-                      />
-                    </div>
-                  </div>
+                  <p className="text-[11px] text-slate-500 pt-1">
+                    Nama dan NIP Kepala Sekolah ini otomatis dicantumkan di lembar pengesahan dan tanda tangan seluruh dokumen pembelajaran (RPP, Modul Ajar, PROTA, PROMES, Jurnal, LKPD).
+                  </p>
                 </div>
               </div>
             )}

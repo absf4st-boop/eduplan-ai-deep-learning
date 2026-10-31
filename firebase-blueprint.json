@@ -1,0 +1,168 @@
+{
+  "entities": {
+    "User": {
+      "title": "User",
+      "description": "Teacher account and school profile information",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique identifier of the user matching auth uid",
+          "maxLength": 128
+        },
+        "name": {
+          "type": "string",
+          "description": "Full name of the teacher",
+          "maxLength": 150
+        },
+        "email": {
+          "type": "string",
+          "description": "Email address of the teacher",
+          "maxLength": 200
+        },
+        "isVerified": {
+          "type": "boolean",
+          "description": "Email verification status"
+        },
+        "isDemo": {
+          "type": "boolean",
+          "description": "Whether this is a demo account"
+        },
+        "teacherProfile": {
+          "type": "object",
+          "description": "Teacher demographic and professional details"
+        },
+        "schoolProfile": {
+          "type": "object",
+          "description": "School institutional information and academic year"
+        },
+        "createdAt": {
+          "type": "string",
+          "description": "Creation timestamp in ISO format",
+          "maxLength": 50
+        },
+        "lastLogin": {
+          "type": "string",
+          "description": "Last login timestamp in ISO format",
+          "maxLength": 50
+        }
+      },
+      "required": ["id", "name", "email", "createdAt"]
+    },
+    "Document": {
+      "title": "Document",
+      "description": "Saved teaching administration document (e.g. Modul Ajar, RPP, Prota, Promes, LKPD)",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique identifier for the document",
+          "maxLength": 128
+        },
+        "userId": {
+          "type": "string",
+          "description": "Owner teacher user ID",
+          "maxLength": 128
+        },
+        "documentType": {
+          "type": "string",
+          "description": "Type of curriculum document (e.g. MODUL_AJAR, RPP, CP, TP, ATP, PROTA, PROMES, LKPD)",
+          "maxLength": 50
+        },
+        "title": {
+          "type": "string",
+          "description": "Document title",
+          "maxLength": 255
+        },
+        "subject": {
+          "type": "string",
+          "description": "Academic subject (e.g. PJOK, Matematika, Bahasa Indonesia)",
+          "maxLength": 100
+        },
+        "grade": {
+          "type": "string",
+          "description": "Class grade level (1-6)",
+          "maxLength": 20
+        },
+        "semester": {
+          "type": "string",
+          "description": "Academic semester (Ganjil / Genap)",
+          "maxLength": 20
+        },
+        "topic": {
+          "type": "string",
+          "description": "Lesson topic or learning unit",
+          "maxLength": 255
+        },
+        "content": {
+          "type": "string",
+          "description": "Full generated curriculum document content in markdown or HTML format",
+          "maxLength": 1000000
+        },
+        "createdAt": {
+          "type": "string",
+          "description": "Creation timestamp",
+          "maxLength": 50
+        },
+        "updatedAt": {
+          "type": "string",
+          "description": "Last update timestamp",
+          "maxLength": 50
+        }
+      },
+      "required": ["id", "userId", "documentType", "title", "content", "createdAt"]
+    },
+    "Student": {
+      "title": "Student",
+      "description": "Student record in the teacher's class roster",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique student identifier",
+          "maxLength": 128
+        },
+        "userId": {
+          "type": "string",
+          "description": "Owner teacher user ID",
+          "maxLength": 128
+        },
+        "nisn": {
+          "type": "string",
+          "description": "National Student Identification Number",
+          "maxLength": 20
+        },
+        "name": {
+          "type": "string",
+          "description": "Student full name",
+          "maxLength": 150
+        },
+        "gender": {
+          "type": "string",
+          "description": "Gender ('L' or 'P')",
+          "maxLength": 5
+        },
+        "grade": {
+          "type": "string",
+          "description": "Student grade level",
+          "maxLength": 20
+        }
+      },
+      "required": ["id", "userId", "nisn", "name", "gender", "grade"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": "User",
+      "description": "Individual teacher user profiles and institutional settings"
+    },
+    "/users/{userId}/documents/{docId}": {
+      "schema": "Document",
+      "description": "Subcollection of teaching administration documents created by the teacher"
+    },
+    "/users/{userId}/students/{studentId}": {
+      "schema": "Student",
+      "description": "Subcollection of students in the teacher's classroom roster"
+    }
+  }
+}

@@ -1,0 +1,109 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // 1. Master Catch-All: Default deny
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // Hardened Global Helpers
+    function isValidId(id) {
+      return id is string && id.size() > 0 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
+    // Entity Validation Blueprints
+    function isValidUser(data, userId) {
+      return data.id is string && data.id == userId &&
+             data.name is string && data.name.size() > 0 && data.name.size() <= 150 &&
+             data.email is string && data.email.size() > 0 && data.email.size() <= 200 &&
+             (!('isVerified' in data) || data.isVerified is bool) &&
+             (!('isDemo' in data) || data.isDemo is bool);
+    }
+
+    function isValidDocument(data, userId) {
+      return data.id is string && isValidId(data.id) &&
+             data.userId is string && data.userId == userId &&
+             data.documentType is string && data.documentType.size() <= 50 &&
+             data.title is string && data.title.size() > 0 && data.title.size() <= 255 &&
+             data.content is string && data.content.size() <= 1000000;
+    }
+
+    function isValidStudent(data, userId) {
+      return data.id is string && isValidId(data.id) &&
+             data.userId is string && data.userId == userId &&
+             data.name is string && data.name.size() > 0 && data.name.size() <= 150 &&
+             data.nisn is string && data.nisn.size() <= 20;
+    }
+
+    // Collection: Users (Private profiles)
+    match /users/{userId} {
+      allow get: if isOwner(userId) && isValidId(userId);
+      allow list: if false; // Blanket enumeration strictly forbidden
+
+      allow create: if isOwner(userId) &&
+                       isValidId(userId) &&
+                       isValidUser(incoming(), userId);
+
+      allow update: if isOwner(userId) &&
+                       isValidId(userId) &&
+                       isValidUser(incoming(), userId) &&
+                       incoming().id == existing().id &&
+                       incoming().email == existing().email;
+
+      allow delete: if isOwner(userId) && isValidId(userId);
+
+      // Subcollection: Saved curriculum documents
+      match /documents/{docId} {
+        allow get: if isOwner(userId) && isValidId(docId);
+        allow list: if isOwner(userId) && resource.data.userId == request.auth.uid;
+
+        allow create: if isOwner(userId) &&
+                         isValidId(docId) &&
+                         incoming().userId == request.auth.uid &&
+                         isValidDocument(incoming(), userId);
+
+        allow update: if isOwner(userId) &&
+                         isValidId(docId) &&
+                         incoming().userId == existing().userId &&
+                         isValidDocument(incoming(), userId);
+
+        allow delete: if isOwner(userId) && isValidId(docId);
+      }
+
+      // Subcollection: Classroom students roster
+      match /students/{studentId} {
+        allow get: if isOwner(userId) && isValidId(studentId);
+        allow list: if isOwner(userId) && resource.data.userId == request.auth.uid;
+
+        allow create: if isOwner(userId) &&
+                         isValidId(studentId) &&
+                         incoming().userId == request.auth.uid &&
+                         isValidStudent(incoming(), userId);
+
+        allow update: if isOwner(userId) &&
+                         isValidId(studentId) &&
+                         incoming().userId == existing().userId &&
+                         isValidStudent(incoming(), userId);
+
+        allow delete: if isOwner(userId) && isValidId(studentId);
+      }
+    }
+  }
+}

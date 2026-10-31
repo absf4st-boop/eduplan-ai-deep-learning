@@ -3,6 +3,11 @@
  * Handles user sessions, profile management, saved documents, and students
  */
 import { UserAccount, SavedDocument, Student } from '../types';
+import {
+  syncUserToFirestore,
+  syncDocumentToFirestore,
+  deleteDocumentFromFirestore
+} from './firebase';
 
 export const DEMO_USER: UserAccount = {
   id: 'demo-user-001',
@@ -143,6 +148,13 @@ export function setCurrentUser(user: UserAccount): void {
     users.push(normalized);
   }
   localStorage.setItem(USERS_KEY, JSON.stringify(users));
+
+  // Sync to Firestore if not a demo account
+  if (!normalized.isDemo && normalized.id && !normalized.id.startsWith('demo-')) {
+    syncUserToFirestore(normalized).catch((err) => {
+      console.warn('Firestore user profile sync error (offline/pending):', err);
+    });
+  }
 }
 
 export function saveRegisteredUser(user: UserAccount): void {
@@ -226,6 +238,13 @@ export function saveDocument(doc: SavedDocument): void {
       all.unshift(normalized);
     }
     localStorage.setItem(DOCUMENTS_KEY, JSON.stringify(all));
+
+    // Sync to Firestore if user is not demo
+    if (normalized.userId && !normalized.userId.startsWith('demo-')) {
+      syncDocumentToFirestore(normalized.userId, normalized).catch((err) => {
+        console.warn('Firestore document sync error (offline/pending):', err);
+      });
+    }
   } catch (e) {
     console.error('Failed to save document', e);
   }
@@ -236,8 +255,15 @@ export function deleteDocument(docId: string): void {
     const raw = localStorage.getItem(DOCUMENTS_KEY);
     if (raw) {
       let all: SavedDocument[] = JSON.parse(raw);
+      const target = all.find((d) => d.id === docId);
       all = all.filter((d) => d.id !== docId);
       localStorage.setItem(DOCUMENTS_KEY, JSON.stringify(all));
+
+      if (target && target.userId && !target.userId.startsWith('demo-')) {
+        deleteDocumentFromFirestore(target.userId, docId).catch((err) => {
+          console.warn('Firestore document deletion error:', err);
+        });
+      }
     }
   } catch (e) {
     console.error('Failed to delete document', e);
