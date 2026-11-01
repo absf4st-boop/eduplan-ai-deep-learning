@@ -332,7 +332,7 @@ Format keluaran HARUS murni JSON array tanpa markdown/fences:
 Tag hanya bernilai salah satu dari: "Mindful", "Meaningful", "Joyful".`;
 
       const response = await ai.models.generateContent({
-        model: 'gemini-2.5-flash',
+        model: 'gemini-3.8-flash',
         contents: prompt,
         config: {
           responseMimeType: 'application/json',
@@ -449,7 +449,7 @@ Pastikan dokumen memuat:
   try {
     if (ai) {
       const response = await ai.models.generateContent({
-        model: 'gemini-2.5-flash',
+        model: 'gemini-3.8-flash',
         contents: userPrompt,
         config: {
           systemInstruction: systemPrompt,

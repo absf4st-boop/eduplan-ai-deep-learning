@@ -70,7 +70,7 @@ Guru: ${teacherProfile?.fullName || teacherProfile?.name}, NIP: ${teacherProfile
 Sekolah: ${schoolProfile?.schoolName || schoolProfile?.name}`;
 
                 const response = await ai.models.generateContent({
-                  model: 'gemini-2.5-flash',
+                  model: 'gemini-3.8-flash',
                   contents: userPrompt,
                   config: {
                     systemInstruction: systemPrompt,

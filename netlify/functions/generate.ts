@@ -49,7 +49,7 @@ Nama Sekolah: ${schoolProfile?.schoolName || 'SD Negeri'}
 Kepala Sekolah: ${schoolProfile?.headmaster?.name || 'Kepala Sekolah'}`;
 
     const response = await ai.models.generateContent({
-      model: 'gemini-2.5-flash',
+      model: 'gemini-3.8-flash',
       contents: prompt,
       config: {
         systemInstruction,
