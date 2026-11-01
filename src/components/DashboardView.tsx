@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   UserAccount,
   DocumentType,
@@ -14,6 +14,7 @@ import { InteractiveGrades } from './InteractiveGrades';
 import { ProfileModal } from './ProfileModal';
 import { PublishGuideModal } from './PublishGuideModal';
 import { getDocuments, saveDocument } from '../services/storage';
+import { auth, subscribeToUserDocuments } from '../services/firebase';
 import {
   LayoutDashboard,
   FileText,
@@ -61,6 +62,37 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
 
   // Documents list for current user
   const [documents, setDocuments] = useState<SavedDocument[]>(() => getDocuments(user.id));
+
+  // Attach real-time Firestore onSnapshot listener when authenticated in Firebase
+  useEffect(() => {
+    // Initial sync from local storage
+    setDocuments(getDocuments(user.id));
+
+    const handleDocsUpdated = (e: any) => {
+      if (e.detail && Array.isArray(e.detail)) {
+        setDocuments(e.detail);
+      } else {
+        setDocuments(getDocuments(user.id));
+      }
+    };
+    window.addEventListener('eduplan:documents-updated', handleDocsUpdated);
+
+    if (!user.isDemo && auth.currentUser) {
+      const unsub = subscribeToUserDocuments(user.id, (firestoreDocs) => {
+        if (firestoreDocs) {
+          setDocuments(firestoreDocs);
+        }
+      });
+      return () => {
+        window.removeEventListener('eduplan:documents-updated', handleDocsUpdated);
+        unsub();
+      };
+    }
+
+    return () => {
+      window.removeEventListener('eduplan:documents-updated', handleDocsUpdated);
+    };
+  }, [user.id, user.isDemo]);
 
   const refreshDocuments = () => {
     setDocuments(getDocuments(user.id));

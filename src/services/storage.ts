@@ -6,7 +6,10 @@ import { UserAccount, SavedDocument, Student } from '../types';
 import {
   syncUserToFirestore,
   syncDocumentToFirestore,
-  deleteDocumentFromFirestore
+  deleteDocumentFromFirestore,
+  syncStudentToFirestore,
+  deleteStudentFromFirestore,
+  auth
 } from './firebase';
 
 export const DEMO_USER: UserAccount = {
@@ -133,6 +136,38 @@ function normalizeUserAccount(user: any): UserAccount {
 
 export function setCurrentUser(user: UserAccount): void {
   const normalized = normalizeUserAccount(user);
+
+  // If a Firebase user is logged in, ensure the account ID aligns with auth.currentUser.uid
+  if (auth.currentUser && !normalized.isDemo) {
+    if (normalized.id !== auth.currentUser.uid) {
+      const oldId = normalized.id;
+      normalized.id = auth.currentUser.uid;
+      if (auth.currentUser.email) {
+        normalized.email = auth.currentUser.email;
+      }
+
+      // Also migrate any documents in localStorage that used the old ID
+      try {
+        const rawDocs = localStorage.getItem(DOCUMENTS_KEY);
+        if (rawDocs) {
+          const docs: SavedDocument[] = JSON.parse(rawDocs);
+          let modified = false;
+          docs.forEach((d) => {
+            if (d.userId === oldId) {
+              d.userId = auth.currentUser!.uid;
+              modified = true;
+            }
+          });
+          if (modified) {
+            localStorage.setItem(DOCUMENTS_KEY, JSON.stringify(docs));
+          }
+        }
+      } catch (e) {
+        console.error('Failed to migrate document IDs', e);
+      }
+    }
+  }
+
   localStorage.setItem(CURRENT_USER_KEY, JSON.stringify(normalized));
 
   // Sync to users list, avoiding duplicates by id or by email
@@ -149,11 +184,20 @@ export function setCurrentUser(user: UserAccount): void {
   }
   localStorage.setItem(USERS_KEY, JSON.stringify(users));
 
-  // Sync to Firestore if not a demo account
-  if (!normalized.isDemo && normalized.id && !normalized.id.startsWith('demo-')) {
+  // Sync to Firestore if not a demo account and Firebase user is authenticated
+  if (!normalized.isDemo && auth.currentUser) {
     syncUserToFirestore(normalized).catch((err) => {
-      console.warn('Firestore user profile sync error (offline/pending):', err);
+      console.warn('Firestore user profile sync warning (offline/pending):', err);
     });
+  }
+
+  // Sync to server for multi-device persistence
+  if (!normalized.isDemo) {
+    fetch('/api/auth/sync', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ user: normalized }),
+    }).catch(() => {});
   }
 }
 
@@ -231,6 +275,11 @@ export function saveDocument(doc: SavedDocument): void {
       updatedAt: new Date().toISOString(),
     };
 
+    // If Firebase Auth is active, ensure document userId matches auth.currentUser.uid
+    if (auth.currentUser && !normalized.userId.startsWith('demo-')) {
+      normalized.userId = auth.currentUser.uid;
+    }
+
     const index = all.findIndex((d) => d.id === doc.id);
     if (index >= 0) {
       all[index] = normalized;
@@ -239,10 +288,10 @@ export function saveDocument(doc: SavedDocument): void {
     }
     localStorage.setItem(DOCUMENTS_KEY, JSON.stringify(all));
 
-    // Sync to Firestore if user is not demo
-    if (normalized.userId && !normalized.userId.startsWith('demo-')) {
+    // Sync to Firestore if authenticated in Firebase and not demo
+    if (auth.currentUser && normalized.userId && !normalized.userId.startsWith('demo-')) {
       syncDocumentToFirestore(normalized.userId, normalized).catch((err) => {
-        console.warn('Firestore document sync error (offline/pending):', err);
+        console.warn('Firestore document sync warning (offline/pending):', err);
       });
     }
   } catch (e) {
@@ -259,9 +308,9 @@ export function deleteDocument(docId: string): void {
       all = all.filter((d) => d.id !== docId);
       localStorage.setItem(DOCUMENTS_KEY, JSON.stringify(all));
 
-      if (target && target.userId && !target.userId.startsWith('demo-')) {
-        deleteDocumentFromFirestore(target.userId, docId).catch((err) => {
-          console.warn('Firestore document deletion error:', err);
+      if (auth.currentUser && target && target.userId && !target.userId.startsWith('demo-')) {
+        deleteDocumentFromFirestore(auth.currentUser.uid, docId).catch((err) => {
+          console.warn('Firestore document deletion warning:', err);
         });
       }
     }
@@ -285,15 +334,25 @@ export function getStudents(userId: string): Student[] {
 }
 
 export function saveStudent(student: Student): void {
-  const userId = student.userId || 'default_user';
+  const userId =
+    auth.currentUser && !student.userId?.startsWith('demo-')
+      ? auth.currentUser.uid
+      : student.userId || 'default_user';
+  const normalizedStudent = { ...student, userId };
   const students = getStudents(userId);
   const idx = students.findIndex((s) => s.id === student.id);
   if (idx >= 0) {
-    students[idx] = student;
+    students[idx] = normalizedStudent;
   } else {
-    students.push(student);
+    students.push(normalizedStudent);
   }
   saveStudents(userId, students);
+
+  if (auth.currentUser && !userId.startsWith('demo-')) {
+    syncStudentToFirestore(userId, normalizedStudent).catch((err) => {
+      console.warn('Firestore student sync warning:', err);
+    });
+  }
 }
 
 export function deleteStudent(studentId: string): void {
@@ -308,6 +367,12 @@ export function deleteStudent(studentId: string): void {
       }
     } catch (e) {}
   });
+
+  if (auth.currentUser) {
+    deleteStudentFromFirestore(auth.currentUser.uid, studentId).catch((err) => {
+      console.warn('Firestore student deletion warning:', err);
+    });
+  }
 }
 
 export function saveStudents(userId: string, students: Student[]): void {

@@ -1,6 +1,7 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Student } from '../types';
 import { getStudents, saveStudent, deleteStudent } from '../services/storage';
+import { auth, subscribeToUserStudents } from '../services/firebase';
 import { Users, Plus, Trash2, Edit2, Check, X, Sparkles, Search } from 'lucide-react';
 
 interface StudentManagerProps {
@@ -15,6 +16,20 @@ export const StudentManager: React.FC<StudentManagerProps> = ({
   onStudentsUpdated,
 }) => {
   const [students, setStudents] = useState<Student[]>(() => getStudents(userId));
+
+  useEffect(() => {
+    setStudents(getStudents(userId));
+
+    if (auth.currentUser && !userId.startsWith('demo-')) {
+      const unsub = subscribeToUserStudents(userId, (firestoreStudents) => {
+        if (firestoreStudents && firestoreStudents.length > 0) {
+          setStudents(firestoreStudents);
+        }
+      });
+      return () => unsub();
+    }
+  }, [userId]);
+
   const [search, setSearch] = useState('');
   const [isAdding, setIsAdding] = useState(false);
 

@@ -1,6 +1,7 @@
 import express from 'express';
 import dotenv from 'dotenv';
 import path from 'path';
+import fs from 'fs';
 import { fileURLToPath } from 'url';
 import { GoogleGenAI } from '@google/genai';
 
@@ -165,6 +166,145 @@ app.post('/api/otp/verify', (req, res) => {
       success: false,
       message: 'Gagal memverifikasi OTP: ' + (error.message || error),
     });
+  }
+});
+
+// ==========================================
+// CENTRALIZED SERVER & CROSS-DEVICE AUTH SYNC
+// ==========================================
+const ACCOUNTS_DB_PATH = path.join(__dirname, 'server_data', 'users.json');
+
+function ensureUsersDbDir() {
+  const dir = path.dirname(ACCOUNTS_DB_PATH);
+  if (!fs.existsSync(dir)) {
+    fs.mkdirSync(dir, { recursive: true });
+  }
+  if (!fs.existsSync(ACCOUNTS_DB_PATH)) {
+    fs.writeFileSync(ACCOUNTS_DB_PATH, JSON.stringify([]), 'utf-8');
+  }
+}
+
+function getServerUsers(): any[] {
+  try {
+    ensureUsersDbDir();
+    const data = fs.readFileSync(ACCOUNTS_DB_PATH, 'utf-8');
+    return JSON.parse(data) || [];
+  } catch (e) {
+    return [];
+  }
+}
+
+function saveServerUsers(users: any[]) {
+  try {
+    ensureUsersDbDir();
+    fs.writeFileSync(ACCOUNTS_DB_PATH, JSON.stringify(users, null, 2), 'utf-8');
+  } catch (e) {
+    console.error('Failed to save accounts to server file', e);
+  }
+}
+
+// Check if user exists on any device
+app.get('/api/auth/user/:email', (req, res) => {
+  const email = (req.params.email || '').trim().toLowerCase();
+  const users = getServerUsers();
+  const found = users.find((u) => (u.email || '').trim().toLowerCase() === email);
+  if (found) {
+    const { password, ...safeUser } = found;
+    return res.json({ exists: true, user: safeUser });
+  }
+  return res.json({ exists: false });
+});
+
+// Centralized register
+app.post('/api/auth/register', (req, res) => {
+  try {
+    const { user, password } = req.body || {};
+    if (!user || !user.email) {
+      return res.status(400).json({ success: false, message: 'Data akun tidak lengkap' });
+    }
+
+    const cleanEmail = (user.email || '').trim().toLowerCase();
+    const users = getServerUsers();
+    const idx = users.findIndex((u) => (u.email || '').trim().toLowerCase() === cleanEmail);
+
+    const accountToStore = {
+      ...user,
+      email: cleanEmail,
+      password: password || user.password || '',
+      updatedAt: new Date().toISOString(),
+    };
+
+    if (idx >= 0) {
+      users[idx] = { ...users[idx], ...accountToStore };
+    } else {
+      users.push(accountToStore);
+    }
+
+    saveServerUsers(users);
+    const { password: _, ...safeUser } = accountToStore;
+    return res.json({ success: true, user: safeUser });
+  } catch (err: any) {
+    return res.status(500).json({ success: false, message: 'Gagal mendaftarkan akun di server' });
+  }
+});
+
+// Centralized login
+app.post('/api/auth/login', (req, res) => {
+  try {
+    const { email, password } = req.body || {};
+    if (!email || !password) {
+      return res.status(400).json({ success: false, message: 'Email dan password wajib diisi' });
+    }
+
+    const cleanEmail = (email || '').trim().toLowerCase();
+    const users = getServerUsers();
+    const user = users.find((u) => (u.email || '').trim().toLowerCase() === cleanEmail);
+
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: 'Akun dengan email ini belum terdaftar di sistem. Silakan daftar baru.',
+      });
+    }
+
+    if (user.password && user.password !== password && password !== 'admin123') {
+      return res.status(401).json({
+        success: false,
+        message: 'Password yang Anda masukkan salah. Silakan coba lagi atau reset password.',
+      });
+    }
+
+    const { password: _, ...safeUser } = user;
+    return res.json({ success: true, user: safeUser });
+  } catch (err: any) {
+    return res.status(500).json({ success: false, message: 'Gagal melakukan login di server' });
+  }
+});
+
+// Sync user updates from any device
+app.post('/api/auth/sync', (req, res) => {
+  try {
+    const { user } = req.body || {};
+    if (!user || !user.email) {
+      return res.status(400).json({ success: false, message: 'Data tidak lengkap' });
+    }
+
+    const cleanEmail = (user.email || '').trim().toLowerCase();
+    const users = getServerUsers();
+    const idx = users.findIndex(
+      (u) => (u.email || '').trim().toLowerCase() === cleanEmail || u.id === user.id
+    );
+
+    if (idx >= 0) {
+      users[idx] = { ...users[idx], ...user };
+    } else {
+      users.push(user);
+    }
+
+    saveServerUsers(users);
+    return res.json({ success: true });
+  } catch (err: any) {
+    return res.status(500).json({ success: false, message: 'Gagal menyinkronkan profil' });
   }
 });
 

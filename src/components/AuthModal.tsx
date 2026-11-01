@@ -7,7 +7,14 @@ import {
   setCurrentUser,
   getRegisteredUsers
 } from '../services/storage';
-import { signInWithGoogle } from '../services/firebase';
+import {
+  signInWithGoogle,
+  auth,
+  loadUserFromFirestore,
+  loadDocumentsFromFirestore,
+  loadStudentsFromFirestore,
+  syncUserToFirestore
+} from '../services/firebase';
 import {
   X,
   Mail,
@@ -221,7 +228,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
       // Verification succeeded! Proceed with registration or password reset
       if (tab === 'register') {
         const existing = findUserByEmail(email);
-        const userId = existing ? existing.id : 'user_' + Date.now();
+        const userId = (auth.currentUser && auth.currentUser.uid) || (existing ? existing.id : 'user_' + Date.now());
 
         const defaultTeacher: TeacherProfile = existing?.teacherProfile || {
           fullName: name,
@@ -261,6 +268,14 @@ export const AuthModal: React.FC<AuthModalProps> = ({
 
         saveRegisteredUser(newUser);
         setCurrentUser(newUser);
+
+        // Store account on server for cross-device persistence
+        fetch('/api/auth/register', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ user: newUser, password }),
+        }).catch(() => {});
+
         onSuccess(newUser, true);
         onClose();
       } else if (tab === 'forgot') {
@@ -296,66 +311,103 @@ export const AuthModal: React.FC<AuthModalProps> = ({
       }
       const gEmail = (fUser.email || '').trim().toLowerCase();
       const gName = fUser.displayName || 'Bapak/Ibu Guru';
-      const existing = findUserByEmail(gEmail);
+
+      // 1. UTAMA: Ambil data pengguna asli dari Firebase Firestore terlebih dahulu!
+      const cloudProfile = await loadUserFromFirestore(fUser.uid);
+      const cloudDocs = await loadDocumentsFromFirestore(fUser.uid);
+      const cloudStudents = await loadStudentsFromFirestore(fUser.uid);
 
       let userToSet: UserAccount;
       let isNew = false;
 
-      if (existing) {
+      if (cloudProfile && cloudProfile.name) {
+        // Data ditemukan di Firebase Firestore (dari perangkat lain atau sesi sebelumnya)
         userToSet = {
-          ...existing,
+          ...cloudProfile,
           id: fUser.uid,
+          email: gEmail || cloudProfile.email,
           lastLogin: new Date().toISOString(),
         };
       } else {
-        isNew = true;
-        const defaultTeacher: TeacherProfile = {
-          fullName: gName,
-          name: gName,
-          nip: '-',
-          email: gEmail,
-          position: 'Guru PJOK SD',
-          rank: 'Penata Muda / III a',
-          rankGroup: 'Penata Muda / III a',
-        };
+        // Cek apakah ada data di server akun atau akun lokal
+        let serverAccount: any = null;
+        try {
+          const res = await fetch(`/api/auth/user/${encodeURIComponent(gEmail)}`);
+          const resData = await res.json();
+          if (resData && resData.exists) serverAccount = resData.user;
+        } catch (e) {}
 
-        const defaultSchool: SchoolProfile = {
-          schoolName: 'SD Negeri Kasepuhan 04',
-          name: 'SD Negeri Kasepuhan 04',
-          npsn: '20301928',
-          educationLevel: 'Sekolah Dasar (SD)',
-          level: 'Sekolah Dasar (SD)',
-          address: 'Jl. Raya Kasepuhan No. 04',
-          village: 'Kasepuhan',
-          district: 'Batang',
-          regency: 'Kabupaten Batang',
-          province: 'Jawa Tengah',
-          academicYear: '2026/2027',
-          activeSubject: 'PJOK',
-          activeGrade: '5',
-          activePhase: 'Fase C',
-        };
+        const existing = serverAccount || findUserByEmail(gEmail);
+        if (existing) {
+          userToSet = {
+            ...existing,
+            id: fUser.uid,
+            email: gEmail,
+            lastLogin: new Date().toISOString(),
+          };
+        } else {
+          isNew = true;
+          const defaultTeacher: TeacherProfile = {
+            fullName: gName,
+            name: gName,
+            nip: '-',
+            email: gEmail,
+            position: 'Guru PJOK SD',
+            rank: 'Penata Muda / III a',
+            rankGroup: 'Penata Muda / III a',
+          };
 
-        userToSet = {
-          id: fUser.uid,
-          email: gEmail,
-          name: gName,
-          isVerified: true,
-          isDemo: false,
-          createdAt: new Date().toISOString(),
-          lastLogin: new Date().toISOString(),
-          teacherProfile: defaultTeacher,
-          schoolProfile: defaultSchool,
-        };
+          const defaultSchool: SchoolProfile = {
+            schoolName: 'SD Negeri Kasepuhan 04',
+            name: 'SD Negeri Kasepuhan 04',
+            npsn: '20301928',
+            educationLevel: 'Sekolah Dasar (SD)',
+            level: 'Sekolah Dasar (SD)',
+            address: 'Jl. Raya Kasepuhan No. 04',
+            village: 'Kasepuhan',
+            district: 'Batang',
+            regency: 'Kabupaten Batang',
+            province: 'Jawa Tengah',
+            academicYear: '2026/2027',
+            activeSubject: 'PJOK',
+            activeGrade: '5',
+            activePhase: 'Fase C',
+          };
+
+          userToSet = {
+            id: fUser.uid,
+            email: gEmail,
+            name: gName,
+            isVerified: true,
+            isDemo: false,
+            createdAt: new Date().toISOString(),
+            lastLogin: new Date().toISOString(),
+            teacherProfile: defaultTeacher,
+            schoolProfile: defaultSchool,
+          };
+        }
+
+        // Sinkronkan ke cloud Firestore
+        await syncUserToFirestore(userToSet);
       }
 
+      // 2. Simpan semua dokumen dari Firebase ke cache lokal
+      if (cloudDocs && cloudDocs.length > 0) {
+        localStorage.setItem('eduplan_documents_v2', JSON.stringify(cloudDocs));
+      }
+
+      // 3. Simpan data siswa dari Firebase ke cache lokal
+      if (cloudStudents && cloudStudents.length > 0) {
+        localStorage.setItem(`eduplan_students_v2_${fUser.uid}`, JSON.stringify(cloudStudents));
+      }
+
+      // 4. Update data pengguna dan jalankan callback login
       saveRegisteredUser(userToSet);
       setCurrentUser(userToSet);
       onSuccess(userToSet, isNew);
       onClose();
     } catch (err: any) {
       console.error('Google Sign-In failed:', err);
-      // If user closed the popup, don't show an alarming error
       if (err?.code === 'auth/popup-closed-by-user') {
         setErrorMessage('Jendela login Google ditutup sebelum selesai.');
       } else {
@@ -366,7 +418,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
     }
   };
 
-  const handleStandardLogin = (e: React.FormEvent) => {
+  const handleStandardLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMessage('');
 
@@ -376,27 +428,59 @@ export const AuthModal: React.FC<AuthModalProps> = ({
     }
 
     const cleanEmail = email.trim().toLowerCase();
-    const user = findUserByEmail(cleanEmail);
+    setIsLoading(true);
 
-    if (!user) {
-      setErrorMessage('Akun dengan email ini belum terdaftar. Silakan lakukan pendaftaran terlebih dahulu.');
-      return;
+    try {
+      // 1. Coba periksa autentikasi server untuk sinkronisasi antar-perangkat
+      let serverUser: UserAccount | null = null;
+      try {
+        const resp = await fetch('/api/auth/login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email: cleanEmail, password }),
+        });
+        const respData = await resp.json().catch(() => ({}));
+        if (resp.ok && respData.success && respData.user) {
+          serverUser = respData.user;
+        } else if (resp.status === 401) {
+          setErrorMessage(respData.message || 'Password yang Anda masukkan salah.');
+          setIsLoading(false);
+          return;
+        }
+      } catch (err) {}
+
+      const localUser = findUserByEmail(cleanEmail);
+      const user = serverUser || localUser;
+
+      if (!user) {
+        setErrorMessage('Akun dengan email ini belum terdaftar di sistem. Silakan lakukan pendaftaran terlebih dahulu.');
+        setIsLoading(false);
+        return;
+      }
+
+      if (!serverUser && user.password && user.password !== password && password !== 'admin123') {
+        setErrorMessage('Password yang Anda masukkan salah. Gunakan fitur "Lupa Password" jika lupa.');
+        setIsLoading(false);
+        return;
+      }
+
+      // Login success!
+      const updatedUser: UserAccount = {
+        ...user,
+        id: (auth.currentUser && auth.currentUser.uid && auth.currentUser.email?.toLowerCase() === cleanEmail)
+          ? auth.currentUser.uid
+          : user.id,
+        lastLogin: new Date().toISOString(),
+      };
+      saveRegisteredUser(updatedUser);
+      setCurrentUser(updatedUser);
+      onSuccess(updatedUser, false);
+      onClose();
+    } catch (err: any) {
+      setErrorMessage('Terjadi kendala saat login: ' + (err.message || err));
+    } finally {
+      setIsLoading(false);
     }
-
-    if (user.password && user.password !== password && password !== 'admin123') {
-      setErrorMessage('Password yang Anda masukkan salah. Gunakan fitur "Lupa Password" jika lupa.');
-      return;
-    }
-
-    // Login success!
-    const updatedUser: UserAccount = {
-      ...user,
-      lastLogin: new Date().toISOString(),
-    };
-    saveRegisteredUser(updatedUser);
-    setCurrentUser(updatedUser);
-    onSuccess(updatedUser, false);
-    onClose();
   };
 
   const handleQuickSelectAccount = (account: UserAccount) => {

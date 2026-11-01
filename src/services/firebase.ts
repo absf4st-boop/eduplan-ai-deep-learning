@@ -20,6 +20,8 @@ import {
   deleteDoc,
   collection,
   getDocs,
+  query,
+  where,
   onSnapshot
 } from 'firebase/firestore';
 import firebaseConfig from '../../firebase-applet-config.json';
@@ -100,17 +102,35 @@ export async function signInWithGoogle(): Promise<FirebaseUser> {
   }
 }
 
-// Sync user profile to Firestore
-export async function syncUserToFirestore(user: UserAccount): Promise<void> {
-  const path = `users/${user.id}`;
+// Sign out from Firebase
+export async function signOutFirebase(): Promise<void> {
   try {
-    const userDocRef = doc(db, 'users', user.id);
+    await firebaseSignOut(auth);
+  } catch (error) {
+    console.error('Firebase sign-out error:', error);
+  }
+}
+
+// Sync user profile to Firestore
+// Strictly guarantees target path matches request.auth.uid to satisfy security rules
+export async function syncUserToFirestore(user: UserAccount): Promise<void> {
+  const currentAuth = auth.currentUser;
+  if (!currentAuth) {
+    // Only authenticated Firebase users can write to Firestore per security rules
+    return;
+  }
+
+  const targetUid = currentAuth.uid;
+  const path = `users/${targetUid}`;
+
+  try {
+    const userDocRef = doc(db, 'users', targetUid);
     await setDoc(userDocRef, {
-      id: user.id,
-      name: user.name || user.teacherProfile?.fullName || 'Guru SD',
-      email: user.email || '',
-      isVerified: user.isVerified ?? true,
-      isDemo: user.isDemo ?? false,
+      id: targetUid,
+      name: user.name || user.teacherProfile?.fullName || currentAuth.displayName || 'Guru SD',
+      email: currentAuth.email || user.email || '',
+      isVerified: currentAuth.emailVerified ?? user.isVerified ?? true,
+      isDemo: false,
       teacherProfile: user.teacherProfile || {},
       schoolProfile: user.schoolProfile || {},
       createdAt: user.createdAt || new Date().toISOString(),
@@ -122,10 +142,16 @@ export async function syncUserToFirestore(user: UserAccount): Promise<void> {
 }
 
 // Load user profile from Firestore
-export async function loadUserFromFirestore(userId: string): Promise<UserAccount | null> {
-  const path = `users/${userId}`;
+export async function loadUserFromFirestore(userId?: string): Promise<UserAccount | null> {
+  const currentAuth = auth.currentUser;
+  if (!currentAuth) {
+    return null;
+  }
+
+  const targetUid = currentAuth.uid;
+  const path = `users/${targetUid}`;
   try {
-    const userDocRef = doc(db, 'users', userId);
+    const userDocRef = doc(db, 'users', targetUid);
     const snap = await getDoc(userDocRef);
     if (snap.exists()) {
       return snap.data() as UserAccount;
@@ -139,12 +165,18 @@ export async function loadUserFromFirestore(userId: string): Promise<UserAccount
 
 // Sync saved document to Firestore
 export async function syncDocumentToFirestore(userId: string, document: SavedDocument): Promise<void> {
-  const path = `users/${userId}/documents/${document.id}`;
+  const currentAuth = auth.currentUser;
+  if (!currentAuth) {
+    return;
+  }
+
+  const targetUid = currentAuth.uid;
+  const path = `users/${targetUid}/documents/${document.id}`;
   try {
-    const docRef = doc(db, 'users', userId, 'documents', document.id);
+    const docRef = doc(db, 'users', targetUid, 'documents', document.id);
     await setDoc(docRef, {
       id: document.id,
-      userId: userId,
+      userId: targetUid,
       documentType: document.documentType || document.type || 'MODUL_AJAR',
       title: document.title || 'Dokumen Pembelajaran',
       subject: document.subject || 'PJOK',
@@ -162,27 +194,42 @@ export async function syncDocumentToFirestore(userId: string, document: SavedDoc
 
 // Delete document from Firestore
 export async function deleteDocumentFromFirestore(userId: string, documentId: string): Promise<void> {
-  const path = `users/${userId}/documents/${documentId}`;
+  const currentAuth = auth.currentUser;
+  if (!currentAuth) {
+    return;
+  }
+
+  const targetUid = currentAuth.uid;
+  const path = `users/${targetUid}/documents/${documentId}`;
   try {
-    const docRef = doc(db, 'users', userId, 'documents', documentId);
+    const docRef = doc(db, 'users', targetUid, 'documents', documentId);
     await deleteDoc(docRef);
   } catch (error) {
     handleFirestoreError(error, OperationType.DELETE, path);
   }
 }
 
-// Load all saved documents from Firestore
-export async function loadDocumentsFromFirestore(userId: string): Promise<SavedDocument[]> {
-  const path = `users/${userId}/documents`;
+// Load all saved documents from Firestore for the current authenticated teacher
+export async function loadDocumentsFromFirestore(userId?: string): Promise<SavedDocument[]> {
+  const currentAuth = auth.currentUser;
+  if (!currentAuth) {
+    return [];
+  }
+
+  const targetUid = currentAuth.uid;
+  const path = `users/${targetUid}/documents`;
   try {
-    const colRef = collection(db, 'users', userId, 'documents');
-    const snapshot = await getDocs(colRef);
+    const q = query(
+      collection(db, 'users', targetUid, 'documents'),
+      where('userId', '==', targetUid)
+    );
+    const snapshot = await getDocs(q);
     const docs: SavedDocument[] = [];
-    snapshot.forEach(docSnap => {
+    snapshot.forEach((docSnap) => {
       const data = docSnap.data();
       docs.push({
         id: data.id || docSnap.id,
-        userId: data.userId,
+        userId: targetUid,
         type: data.documentType,
         documentType: data.documentType,
         title: data.title,
@@ -192,7 +239,7 @@ export async function loadDocumentsFromFirestore(userId: string): Promise<SavedD
         topic: data.topic,
         content: data.content,
         createdAt: data.createdAt,
-        updatedAt: data.updatedAt
+        updatedAt: data.updatedAt,
       });
     });
     return docs;
@@ -200,4 +247,188 @@ export async function loadDocumentsFromFirestore(userId: string): Promise<SavedD
     handleFirestoreError(error, OperationType.LIST, path);
     return [];
   }
+}
+
+/**
+ * Real-time listener for User Profile updates using onSnapshot.
+ * Only attached when Firebase user is authenticated.
+ */
+export function subscribeToUserProfile(
+  userId: string,
+  onUpdate: (user: UserAccount) => void
+): () => void {
+  const currentAuth = auth.currentUser;
+  if (!currentAuth) {
+    return () => {};
+  }
+
+  const targetUid = currentAuth.uid;
+  const path = `users/${targetUid}`;
+  const docRef = doc(db, 'users', targetUid);
+
+  return onSnapshot(
+    docRef,
+    (snap) => {
+      if (snap.exists()) {
+        const data = snap.data() as UserAccount;
+        onUpdate(data);
+      }
+    },
+    (error) => {
+      handleFirestoreError(error, OperationType.GET, path);
+    }
+  );
+}
+
+/**
+ * Real-time listener for Saved Curriculum Documents subcollection using onSnapshot.
+ * Only attached when Firebase user is authenticated.
+ */
+export function subscribeToUserDocuments(
+  userId: string,
+  onUpdate: (docs: SavedDocument[]) => void
+): () => void {
+  const currentAuth = auth.currentUser;
+  if (!currentAuth) {
+    return () => {};
+  }
+
+  const targetUid = currentAuth.uid;
+  const path = `users/${targetUid}/documents`;
+  const q = query(
+    collection(db, 'users', targetUid, 'documents'),
+    where('userId', '==', targetUid)
+  );
+
+  return onSnapshot(
+    q,
+    (snapshot) => {
+      const docs: SavedDocument[] = [];
+      snapshot.forEach((docSnap) => {
+        const data = docSnap.data();
+        docs.push({
+          id: data.id || docSnap.id,
+          userId: targetUid,
+          type: data.documentType || data.type || 'MODUL_AJAR',
+          documentType: data.documentType || data.type || 'MODUL_AJAR',
+          title: data.title || 'Dokumen Pembelajaran',
+          subject: data.subject || 'PJOK',
+          grade: data.grade || '5',
+          semester: data.semester || '1',
+          topic: data.topic || data.material || 'Materi',
+          content: data.content || '',
+          createdAt: data.createdAt || new Date().toISOString(),
+          updatedAt: data.updatedAt || new Date().toISOString(),
+          deepLearningTags: data.deepLearningTags || [],
+        });
+      });
+      onUpdate(docs);
+    },
+    (error) => {
+      handleFirestoreError(error, OperationType.LIST, path);
+    }
+  );
+}
+
+// Sync student to Firestore
+export async function syncStudentToFirestore(userId: string, student: Student): Promise<void> {
+  const currentAuth = auth.currentUser;
+  if (!currentAuth) return;
+  const targetUid = currentAuth.uid;
+  const path = `users/${targetUid}/students/${student.id}`;
+  try {
+    const docRef = doc(db, 'users', targetUid, 'students', student.id);
+    await setDoc(docRef, {
+      id: student.id,
+      userId: targetUid,
+      nisn: student.nisn || '',
+      name: student.name,
+      gender: student.gender,
+      grade: student.grade || '5',
+    }, { merge: true });
+  } catch (error) {
+    handleFirestoreError(error, OperationType.WRITE, path);
+  }
+}
+
+// Delete student from Firestore
+export async function deleteStudentFromFirestore(userId: string, studentId: string): Promise<void> {
+  const currentAuth = auth.currentUser;
+  if (!currentAuth) return;
+  const targetUid = currentAuth.uid;
+  const path = `users/${targetUid}/students/${studentId}`;
+  try {
+    const docRef = doc(db, 'users', targetUid, 'students', studentId);
+    await deleteDoc(docRef);
+  } catch (error) {
+    handleFirestoreError(error, OperationType.DELETE, path);
+  }
+}
+
+// Load all students from Firestore
+export async function loadStudentsFromFirestore(userId?: string): Promise<Student[]> {
+  const currentAuth = auth.currentUser;
+  if (!currentAuth) return [];
+  const targetUid = currentAuth.uid;
+  const path = `users/${targetUid}/students`;
+  try {
+    const q = query(
+      collection(db, 'users', targetUid, 'students'),
+      where('userId', '==', targetUid)
+    );
+    const snap = await getDocs(q);
+    const list: Student[] = [];
+    snap.forEach((d) => {
+      const data = d.data();
+      list.push({
+        id: data.id || d.id,
+        userId: targetUid,
+        nisn: data.nisn || '',
+        name: data.name,
+        gender: data.gender || 'L',
+        grade: data.grade || '5',
+      });
+    });
+    return list;
+  } catch (error) {
+    handleFirestoreError(error, OperationType.LIST, path);
+    return [];
+  }
+}
+
+// Real-time listener for classroom students using onSnapshot
+export function subscribeToUserStudents(
+  userId: string,
+  onUpdate: (students: Student[]) => void
+): () => void {
+  const currentAuth = auth.currentUser;
+  if (!currentAuth) return () => {};
+  const targetUid = currentAuth.uid;
+  const path = `users/${targetUid}/students`;
+  const q = query(
+    collection(db, 'users', targetUid, 'students'),
+    where('userId', '==', targetUid)
+  );
+
+  return onSnapshot(
+    q,
+    (snapshot) => {
+      const list: Student[] = [];
+      snapshot.forEach((d) => {
+        const data = d.data();
+        list.push({
+          id: data.id || d.id,
+          userId: targetUid,
+          nisn: data.nisn || '',
+          name: data.name,
+          gender: data.gender || 'L',
+          grade: data.grade || '5',
+        });
+      });
+      onUpdate(list);
+    },
+    (error) => {
+      handleFirestoreError(error, OperationType.LIST, path);
+    }
+  );
 }
